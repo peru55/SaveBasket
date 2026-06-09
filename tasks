@@ -1,0 +1,21 @@
+# SaveBasket Implementation Tasks
+
+- `[x]` Initialize Python backend
+  - `[x]` Create `backend/` directory and configure `requirements.txt`
+  - `[x]` Initialize Django project (`savebasket`)
+  - `[x]` Set up `.env` for Supabase/PostgreSQL configuration
+  - `[x]` Create Django apps (`supermarkets`, `products`, `baskets`)
+  - `[x]` Define database models and relations
+  - `[x]` Run database migrations
+- `[x]` Initialize Flutter frontend
+  - `[x]` Run `flutter create frontend` in workspace
+  - `[x]` Add dependencies (`http`, `provider`) to `pubspec.yaml`
+  - `[x]` Set up basic Dart model classes for products and supermarkets
+- `[x]` Implement Backend APIs
+  - `[x]` Create Django REST framework serializers
+  - `[x]` Create API views for supermarkets, products, and basket comparison
+  - `[x]` Implement basic optimization logic (calculating cheapest store for a basket)
+- `[x]` Implement Frontend UI & Integration
+  - `[x]` Build home and search product screen in Flutter
+  - `[x]` Build basket screen showing real-time price comparison
+  - `[x]` Connect Flutter services to Django APIs
