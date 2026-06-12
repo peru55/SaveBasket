@@ -32,4 +32,5 @@ router.register(r'baskets', BasketViewSet, basename='basket')
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
+    path("api/auth/", include("users.urls")),
 ]

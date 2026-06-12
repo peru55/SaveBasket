@@ -1,9 +1,10 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, permissions
 from django.db.models import Q
 from .models import Product, ProductPrice
 from .serializers import ProductSerializer, ProductPriceSerializer
 
 class ProductViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
 
@@ -24,6 +25,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         return queryset
 
 class ProductPriceViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     queryset = ProductPrice.objects.all()
     serializer_class = ProductPriceSerializer
 
