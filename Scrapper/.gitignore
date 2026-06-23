@@ -1,0 +1,35 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+.env
+
+# SQLite cache and local DBs
+scraper_cache.sqlite
+*.sqlite
+
+# Debug and ephemeral test files
+_debug_*.py
+_test_*.py
+
+# Local agent state and metadata
+.agents/
+
+# Pytest cache
+.pytest_cache/
+
+# Packaging
+dist/
+build/
+*.egg-info/
+
+# IDE / OS
+.vscode/
+Thumbs.db
+desktop.ini
+.DS_Store
+pip-selfcheck.json
