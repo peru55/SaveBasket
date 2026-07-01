@@ -1,0 +1,17 @@
+{
+  "source": "TestMarket",
+  "branch": { "name": "Website", "city": "Nairobi" },
+  "products": [
+    {
+      "name": "Test Juice 1L",
+      "price": 120.0,
+      "barcode": "0000000001",
+      "sku": "TESTSKU1",
+      "url": "https://example.com/product/test-juice-1l",
+      "brand": "TestBrand",
+      "image_url": "https://example.com/image.jpg",
+      "category": "Beverages",
+      "description": "Test product for ingestion"
+    }
+  ]
+}

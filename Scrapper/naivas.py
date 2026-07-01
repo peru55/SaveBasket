@@ -1,13 +1,70 @@
 """Naivas-specific parser for SaveBasket."""
 
+import json
 import logging
 import re
+import html as html_lib
 from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger("ethical_scraper.naivas")
+
+
+def _requested_slug(url: str) -> str:
+    return urlparse(url).path.strip("/").split("/")[-1].lower()
+
+
+def _card_href_slug(href: str) -> str:
+    return urlparse(href).path.strip("/").split("/")[-1].lower()
+
+
+def _price_from_card(scraper, card):
+    price_el = card.select_one("div.product-price span.font-bold, div.product-price")
+    if not price_el:
+        return None
+    return scraper._parse_money(price_el.get_text(" ", strip=True))
+
+
+def _title_from_card(card) -> str | None:
+    link = card.find("a", href=True)
+    if not link:
+        return None
+    return (
+        link.get("title")
+        or link.get("aria-label")
+        or link.get_text(" ", strip=True)
+        or None
+    )
+
+
+def _product_json_ld(scraper, soup) -> dict:
+    for script in soup.find_all("script", type="application/ld+json"):
+        raw = script.string or script.get_text(strip=True)
+        if not raw:
+            continue
+        try:
+            payload = json.loads(html_lib.unescape(raw))
+        except json.JSONDecodeError:
+            continue
+
+        items = payload if isinstance(payload, list) else [payload]
+        for item in items:
+            if not isinstance(item, dict) or item.get("@type") != "Product":
+                continue
+            offers = item.get("offers") or {}
+            if isinstance(offers, list):
+                offers = offers[0] if offers else {}
+            price = offers.get("price") if isinstance(offers, dict) else None
+            parsed_price = scraper._parse_money(str(price)) if price is not None else None
+            if parsed_price is not None:
+                return {
+                    "title": item.get("name"),
+                    "price": parsed_price,
+                    "currency": offers.get("priceCurrency") if isinstance(offers, dict) else "KES",
+                }
+    return {"title": None, "price": None, "currency": None}
 
 
 def parse_naivas(scraper, url: str, html: str) -> dict:
@@ -37,7 +94,7 @@ def parse_naivas(scraper, url: str, html: str) -> dict:
     # Naivas listing pages have cards with class "border border-naivas-bg"
     # Each card contains an <a> with href pointing to the product page.
     # The title is at page-level, NOT inside the cards, so we match by URL.
-    slug = urlparse(url).path.strip("/").split("/")[-1]
+    slug = _requested_slug(url)
     slug_clean = slug.replace("-", " ").lower().strip()
 
     product_cards = soup.select("div.border.border-naivas-bg")
@@ -48,31 +105,45 @@ def parse_naivas(scraper, url: str, html: str) -> dict:
         if not link:
             continue
         href = link.get("href", "")
-        # Check if the href contains the slug (matching by URL identity)
-        if slug in href:
+        href_slug = _card_href_slug(href)
+        if href_slug == slug:
             target_card = card
             logger.debug("Naivas found matching card by href: %s", href)
             break
-        # Also check if href contains the path segment
-        path_slug = urlparse(url).path.strip("/")
-        if path_slug in href:
-            target_card = card
-            logger.debug("Naivas found matching card by path: %s", href)
-            break
 
     if target_card:
-        price_el = target_card.select_one(
-            "div.product-price span.font-bold, div.product-price"
-        )
-        if price_el:
-            price = scraper._parse_money(price_el.get_text(" ", strip=True))
+        price = _price_from_card(scraper, target_card)
         if price is not None:
+            card_title = _title_from_card(target_card)
             logger.info(
                 "Naivas parser (card by href): title=%s price=%s",
-                title,
+                card_title or title,
                 price,
             )
-            return {"title": title, "price": price, "currency": "KES"}
+            return {"title": card_title or title, "price": price, "currency": "KES"}
+
+    structured = _product_json_ld(scraper, soup)
+    if structured.get("price") is not None:
+        logger.info(
+            "Naivas parser (json-ld offer): title=%s price=%s",
+            structured.get("title") or title,
+            structured["price"],
+        )
+        return {
+            "title": structured.get("title") or title,
+            "price": structured["price"],
+            "currency": structured.get("currency") or "KES",
+        }
+
+    if product_cards:
+        logger.warning(
+            "Naivas listing page did not contain requested slug '%s'; refusing broad price fallback",
+            slug,
+        )
+        search_result = naivas_search_fallback(scraper, slug_clean, expected_slug=slug)
+        if search_result.get("price") is not None:
+            return search_result
+        return {"title": title, "price": None, "currency": "KES"}
 
     # Strategy 2: Walk up from title to find nearest product-price
     if price is None and title_div:
@@ -131,7 +202,7 @@ def parse_naivas(scraper, url: str, html: str) -> dict:
     return scraper._generic_price_from_html(html)
 
 
-def naivas_search_fallback(scraper, query: str) -> dict:
+def naivas_search_fallback(scraper, query: str, expected_slug: str | None = None) -> dict:
     """Fallback search on Naivas site when direct page parsing fails."""
     if not query:
         return {"title": None, "price": None, "currency": None}
@@ -150,14 +221,16 @@ def naivas_search_fallback(scraper, query: str) -> dict:
         link = card.find("a", href=True)
         if not link:
             continue
+        if expected_slug and _card_href_slug(link["href"]) != expected_slug:
+            continue
         card_title = link.get_text(" ", strip=True)
+        card_title = card_title or link.get("title") or link.get("aria-label")
         if not card_title:
             continue
         overlap = sum(1 for token in query_tokens if token in card_title.lower())
         if overlap == 0:
             continue
-        price_el = card.select_one("div.product-price")
-        price = scraper._parse_money(price_el.get_text(" ", strip=True) if price_el else None)
+        price = _price_from_card(scraper, card)
         if price is None:
             continue
         candidate = {

@@ -26,6 +26,8 @@ class ProductRecord:
     source: str
     currency: str = "KES"
     url: str | None = None
+    sku: str | None = None
+    barcode: str | None = None
     error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -41,6 +43,10 @@ class ProductRecord:
         }
         if self.url:
             data["url"] = self.url
+        if self.sku:
+            data["sku"] = self.sku
+        if self.barcode:
+            data["barcode"] = self.barcode
         if self.error:
             data["error"] = self.error
         return data
@@ -90,7 +96,30 @@ def validate_product(raw: dict[str, Any] | None, *, source: str, url: str | None
         source=raw.get("source") or source,
         currency=raw.get("currency") or "KES",
         url=raw.get("url") or url,
+        sku=raw.get("sku"),
+        barcode=raw.get("barcode"),
         error=raw.get("error"),
     ).to_dict()
     product["normalized_name"] = normalize_product_name(product["name"])
     return product
+
+
+def stable_product_key(product: dict[str, Any]) -> str | None:
+    """Return a stable product identity for duplicate detection."""
+    url = product.get("url")
+    if url:
+        return f"url:{url.strip()}"
+
+    sku = product.get("sku")
+    if sku:
+        return f"sku:{str(sku).strip().lower()}"
+
+    barcode = product.get("barcode")
+    if barcode:
+        return f"barcode:{str(barcode).strip()}"
+
+    normalized_name = product.get("normalized_name") or normalize_product_name(product.get("name"))
+    if normalized_name:
+        return f"name:{normalized_name}"
+
+    return None

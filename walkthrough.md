@@ -1,262 +1,256 @@
-# SaveBasket Implementation Walkthrough
+# SaveBasket Walkthrough
 
-**SaveBasket** is a final-year grocery savings platform for comparing basket prices across Kenyan supermarkets. The project consists of three standalone components: a Django REST backend, a Flutter cross-platform frontend, and a Python web scraper (`Scrapper/`). The scraper is **not yet connected** to the backend; prices currently come from a manual database seeder.
+SaveBasket is a grocery savings platform for comparing basket prices across Kenyan supermarkets. The project currently has three working parts:
+
+- `backend/`: Django REST API, product matching, basket comparison, ingestion history, and admin review queue.
+- `frontend/`: Flutter app for web, mobile, and desktop.
+- `Scrapper/`: Python scraper and JSON persistence pipeline that can push products into the backend.
 
 ---
 
-## Project Structure
+## Current Project Structure
 
-```
+```text
 SaveBasket/
-├── backend/          # Django 5.2 REST API (SQLite locally; PostgreSQL planned)
-├── frontend/         # Flutter mobile/web/desktop client
-├── Scrapper/         # Ethical price scraper for Naivas, Quickmart, Carrefour
-└── walkthrough.md    # This file
+├── backend/          Django REST API
+├── frontend/         Flutter client
+├── Scrapper/         Supermarket scraper and ingestion helpers
+├── ERD.md            Data model notes
+└── walkthrough.md    Current project guide
 ```
 
 ---
 
-## What Was Built
+## Backend
 
-### 1. Django Backend (`backend/`)
+The backend is a Django 5 API using Django REST Framework, JWT auth, and SQLite for local development. It can switch to PostgreSQL through `.env` database settings.
 
-Three domain apps plus authentication:
+### Apps
 
 | App | Purpose |
-|-----|---------|
-| **`supermarkets`** | `Supermarket` and `Branch` models with latitude, longitude, address, and city fields for spatial mapping |
-| **`products`** | `Product` (name, SKU, barcode, category, brand, image) and `ProductPrice` (branch-specific pricing with `source_url` and `updated_at`) |
-| **`baskets`** | `Basket` and `BasketItem` models with a `compare_prices()` method that ranks branches by total cost and item completeness |
-| **`users`** | JWT registration and token endpoints via `djangorestframework-simplejwt` |
+| --- | --- |
+| `supermarkets` | Supermarket chains and branches |
+| `products` | Canonical products, store-specific products, branch prices, raw scraped rows, ingestion history, import review queue |
+| `baskets` | User baskets, basket items, and basket comparison |
+| `users` | Registration and JWT token endpoints |
 
-**Database configuration** (`savebasket/settings.py`):
-- Uses **SQLite** (`backend/db.sqlite3`) when no `DB_HOST` is set in `.env`
-- Switches to **PostgreSQL** when `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` are provided (planned production setup)
+### Main Models
 
-**REST API endpoints** (base: `http://127.0.0.1:8000/api/`):
+| Model | Notes |
+| --- | --- |
+| `Product` | Canonical product record with normalized name, brand, size, unit, and optional image |
+| `StoreProduct` | Store-specific product row linked to one canonical `Product`; unique by `(product, store_name)` |
+| `ProductPrice` | Branch-level price linked to `Product` and `Branch` |
+| `RawScrapedProduct` | Raw scraper item saved before matching |
+| `IngestionHistory` | Audit record for each scraper ingestion run |
+| `ProductImportReview` | Admin queue for possible duplicate products and low-confidence matches |
+| `Basket` / `BasketItem` | User basket and selected products |
 
-| Endpoint | Description |
-|----------|-------------|
-| `/supermarkets/` | List supermarket chains |
-| `/branches/` | List branches (filter: `?supermarket_id=`) |
-| `/products/` | Search products (`?search=`, `?category=`) |
-| `/prices/` | Branch-specific prices (`?product_id=`, `?branch_id=`) |
-| `/baskets/` | CRUD for user baskets (requires auth) |
+### API Routes
+
+Base URL: `http://127.0.0.1:8000/api/`
+
+| Route | Purpose |
+| --- | --- |
+| `/supermarkets/` | List and manage supermarkets |
+| `/branches/` | List and manage branches; supports `?supermarket_id=` |
+| `/products/` | Product search; supports `?search=` and `?category=` |
+| `/prices/` | Branch-level prices; supports `?product_id=` and `?branch_id=` |
+| `/baskets/` | Authenticated basket CRUD |
 | `/baskets/{id}/add_item/` | Add product to basket |
 | `/baskets/{id}/remove_item/` | Remove product from basket |
 | `/baskets/{id}/update_item_quantity/` | Update quantity |
-| `/baskets/{id}/compare/` | Rank branches by basket total |
-| `/auth/register/` | Create account |
-| `/auth/token/` | Obtain JWT access + refresh tokens |
+| `/baskets/{id}/compare/` | Compare basket totals across stores |
+| `/products/image-proxy/?url=...` | Proxy external product images for frontend display |
+| `/scraper/ingest/` | Accept scraper payloads |
+| `/auth/register/` | Register user |
+| `/auth/token/` | Obtain JWT access and refresh token |
 | `/auth/token/refresh/` | Refresh access token |
 
-**Basket comparison logic** (`baskets/models.py`):
-- Aggregates `ProductPrice` records for all products in a basket
-- Computes total cost per branch, tracks missing items, and flags incomplete baskets
-- Sorts results: complete baskets first, then by ascending total cost
+### Product Matching And Import Review
 
-**Database seeder** — run with:
-```bash
-python manage.py seed_data
+Scraper ingestion flows through `ProductMatchService`:
+
+1. Save the incoming row as `RawScrapedProduct`.
+2. Normalize the product name and extract brand, size, and unit.
+3. Match against existing canonical `Product` records.
+4. Create or update the correct `StoreProduct` using `(product, store_name)`.
+5. Create or update branch-level `ProductPrice` when a branch is provided.
+6. Mark the raw row as processed.
+
+The matcher protects against split products such as `Pembe Flour` or `Brookside 500ml` by using normalized names, brand compatibility, size compatibility, token identity scoring, and a broad fallback for older products with missing size/unit data.
+
+The admin review queue catches cases that should not be silently trusted:
+
+- `possible_duplicate`: a new canonical product was created, but an existing product looked similar.
+- `low_confidence_match`: an automatic match was accepted, but the score is below the high-confidence threshold.
+
+Relevant settings:
+
+```python
+PRODUCT_SIMILARITY_THRESHOLD = 0.8
+PRODUCT_LOW_CONFIDENCE_MATCH_THRESHOLD = 0.92
+PRODUCT_REVIEW_MIN_SIMILARITY = 0.55
+SCRAPER_API_KEY = optional
 ```
-Populates Carrefour (Sarit Centre, Junction Mall), Naivas (Westlands, Kilimani), and Quickmart (Lavington) with five staple products (Brookside Milk, Kabras Sugar, Jogoo Maize Meal, Broadways Bread, Fresh Fri Cooking Oil) at varying prices. Some branches intentionally have missing items to test incomplete-basket ranking.
 
-**Dependencies** (`backend/requirements.txt`): Django 5.x, DRF, django-cors-headers, psycopg2-binary, python-dotenv, djangorestframework-simplejwt, requests, beautifulsoup4.
+Open Django admin and use **Product import reviews** to mark items as reviewed, ignored, or open.
+
+### Basket Comparison
+
+Basket comparison groups prices by supermarket and picks the cheapest available branch/channel price for each product. This avoids showing the same supermarket multiple times because of branch-level records.
+
+Results include:
+
+- total basket price
+- number of available products
+- missing products
+- completeness flag
+- per-product price breakdown
+
+Complete baskets are ranked ahead of incomplete baskets, then sorted by total cost.
+
+### Product Images
+
+Product serializers return proxied image URLs. If `Product.image_url` is missing, the API falls back to the first linked `StoreProduct.scraped_image_url`. The frontend then loads images through:
+
+```text
+/api/products/image-proxy/?url=<encoded remote image URL>
+```
+
+This helps avoid supermarket CDN/hotlink failures in the Flutter app.
 
 ---
 
-### 2. Flutter Frontend (`frontend/`)
+## Frontend
 
-A Material 3 client with a forest-green savings theme, responsive layout (mobile bottom nav + desktop side rail), and JWT authentication.
+The frontend is a Flutter Material 3 app using Provider state management.
 
-**State management** (Provider):
-- `AuthProvider` — login, register, logout, silent token refresh (every 12 minutes), session-expired dialog
-- `BasketProvider` — active basket, product search, price comparison results
+### Main Features
 
-**Screens**:
-- **Login / Register** — JWT auth flow with secure token storage (`flutter_secure_storage`)
-- **Dashboard** — savings hero, quick stats, market pulse, fast actions
-- **Browse** — product search with add-to-basket controls
-- **My Basket** — item list with quantity controls and horizontal comparison cards ("Best Deal", "Incomplete" badges)
-- **Comparison Detail** — per-branch breakdown of item availability and totals
+- Login and registration with JWT.
+- Responsive layout for mobile, tablets, laptops, and desktop.
+- Web/tablet/laptop auth screens use `assets/app_images/splash_screen_background.png`.
+- Product search with product images.
+- Basket management with quantity controls.
+- Ranked store comparison cards.
+- Comparison detail screen with missing items and price breakdown.
+- Static supermarket logos from `assets/logos/`, including CleanShelf.
 
-**API client** (`lib/services/api_service.dart`):
-- Platform-aware base URL: `localhost:8000` (web/desktop), `10.0.2.2:8000` (Android emulator)
-- Automatic 401 retry via token refresh
+### Key Files
 
-**Dependencies** (`pubspec.yaml`): `http`, `provider`, `flutter_secure_storage`.
+| File | Purpose |
+| --- | --- |
+| `lib/services/api_service.dart` | Backend API client and token retry |
+| `lib/services/auth_service.dart` | Auth requests and secure token storage |
+| `lib/providers/auth_provider.dart` | Login/register/session state |
+| `lib/providers/basket_provider.dart` | Basket, search, and comparison state |
+| `lib/screens/home_screen.dart` | Main responsive app shell/dashboard |
+| `lib/screens/search_screen.dart` | Product search UI |
+| `lib/screens/basket_screen.dart` | Basket and ranked store results |
+| `lib/screens/comparison_detail_screen.dart` | Detailed store comparison |
+| `lib/screens/login_screen.dart` | Login UI |
+| `lib/screens/register_screen.dart` | Registration UI |
+| `lib/screens/auth_web_shell.dart` | Large-screen auth background shell |
+
+### Assets
+
+```yaml
+assets:
+  - assets/logos/
+  - assets/app_images/
+```
+
+Store logos are local Flutter assets. Product images come from the backend serializer, usually through the image proxy.
 
 ---
 
-### 3. Scrapper (`Scrapper/`)
+## Scrapper
 
-A standalone Python scraper **not yet integrated** with the backend. It is designed to eventually populate `ProductPrice` records with live supermarket data.
+The scraper is a standalone Python package for collecting product data from supermarket storefronts.
 
-**Core class**: `EthicalScraper` (`scraper.py`)
+### Supported Sources
 
-| Feature | Implementation |
-|---------|----------------|
-| Rate limiting | Per-domain delay (default 1 s) with thread-safe locking |
-| robots.txt | Respects disallow rules; allows fetch when robots.txt is missing |
-| Caching | `requests-cache` (5-minute TTL) to reduce repeat requests |
-| Retries | Exponential backoff via `tenacity` (up to 4 attempts) |
-| Timeouts | Naivas: 15 s; Quickmart & Carrefour: 60 s (slow sites) |
+| Source | Status |
+| --- | --- |
+| Naivas | Product page parser and search fallback |
+| Quickmart | Growcer parser with default delivery location setup |
+| Carrefour | HTML/JSON-LD/OCC parsing where the site allows access |
+| CleanShelf | API/category helpers and parser support |
 
-**Site-specific parsers**:
+### Core Files
 
-| Supermarket | Domain | Parser strategy | Current status |
-|-------------|--------|-----------------|----------------|
-| **Naivas** | `naivas.online` | Looks for `div.text-xl` title + sibling price; falls back to generic heuristics | **Working** — HTTP fetch succeeds (200); structured parser matches `text-xl` divs and `product-price` correctly |
-| **Quickmart** | `quickmart.co.ke` | Growcer storefront: `h1` title + `products-price-new` / `products-price` CSS classes; location cookie set automatically | **Working** — Fetch succeeds after location setup; price extracted from `products-price-new` elements |
-| **Carrefour** | `carrefour.ke` | JSON-LD extraction + OCC API fallback; generic HTML heuristics. Uses `cloudscraper` to bypass CDN | **Blocked from non-Kenyan IPs** — Returns empty shell or "Access Denied" via CDN. JSON-LD and OCC API work from Kenyan networks |
+| File | Purpose |
+| --- | --- |
+| `scraper.py` | HTTP behavior, caching, retries, robots handling, parser dispatch |
+| `product.py` | Stable product contract and normalization |
+| `naivas.py` | Naivas parser |
+| `quickmart.py` | Quickmart parser/search |
+| `carrefour.py` | Carrefour parser/OCC fallback |
+| `cleanshelf.py` | CleanShelf parser/API helpers |
+| `json_store.py` | Local JSON snapshot persistence and price history |
+| `run_scraper.py` | One-product scrape command; can persist and push to backend |
+| `push_to_backend.py` | Push one payload/file/url to `/api/scraper/ingest/` |
+| `sync_json_to_backend.py` | Backfill existing JSON snapshots into the backend |
 
-**Entry point**:
+### Product Contract
+
+Parsers normalize outputs into this shape:
+
+```python
+{
+    "name": str | None,
+    "title": str | None,
+    "price": float | None,
+    "currency": "KES",
+    "image_url": str | None,
+    "category": str | None,
+    "availability": "in_stock" | "out_of_stock" | "unknown",
+    "source": str,
+    "normalized_name": str | None,
+}
+```
+
+### Scrape And Push
+
 ```bash
 cd Scrapper
-python run_scraper.py <product_url> [css_selector]
+venv\Scripts\activate
+python run_scraper.py "https://www.naivas.online/brookside-fresh-milk-1l" --backend http://127.0.0.1:8000
 ```
 
-**Dependencies** (`Scrapper/requirements.txt`): requests, requests-cache, beautifulsoup4, lxml, tenacity, cloudscraper.
+If `SCRAPER_API_KEY` is set in `backend/.env`, pass:
+
+```bash
+--key YOUR_KEY
+```
+
+By default, unchanged local JSON snapshots are not pushed. Add `--push-unchanged` when you want an ingestion-history row even if the product did not change.
 
 ---
 
-## Integration Status
-
-```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│  Scrapper   │ ──X──│   Backend    │◄────│  Frontend   │
-│  (standalone)│     │  Django REST │     │   Flutter   │
-└─────────────┘     └──────┬───────┘     └─────────────┘
-                           │
-                    ┌──────▼───────┐
-                    │ SQLite (now) │
-                    │ PostgreSQL   │
-                    │  (planned)   │
-                    └──────────────┘
-```
-
-- **Frontend ↔ Backend**: Connected. Flutter calls REST endpoints; basket operations require JWT auth.
-- **Scrapper ↔ Backend**: **Not connected.** Prices are seeded manually via `seed_data`. Planned next step: a Django management command or Celery task that runs the scraper and upserts `ProductPrice` records using the `source_url` field.
-
----
-
-## Validation & Verification
-
-### Backend Unit Tests
-
-```bash
-cd backend
-python manage.py test
-```
-
-**Latest run (June 2026):**
-- **10 tests discovered** across `baskets`, `users`, and `users.tests_additional`
-- **8 passed**, **1 failed**, **1 error**
-- Basket comparison tests (2): **pass** — correctly ranks cheaper stores and prioritizes complete baskets
-- Auth token/refresh/protected-endpoint tests: **pass**
-- `test_register_creates_user`: **fail** — password `secret123` rejected by Django's password validators (returns 400)
-- `test_register` (from `test_register.py`): **error** — this file is a standalone HTTP script, not a unit test; it runs at import time and fails when the server is not running
-
-Core basket logic verified separately:
-```bash
-python manage.py test baskets
-# Result: 2 tests passed
-```
-
-### Flutter Static Analysis
-
-```bash
-cd frontend
-flutter analyze
-```
-
-**Latest run:** 6 issues (0 errors, 1 warning, 5 info):
-- 5× `use_build_context_synchronously` in `main.dart` and `home_screen.dart`
-- 1× unused field `_initialized` in `auth_provider.dart`
-
-The app compiles and runs; these are lint advisories, not blocking errors.
-
-### Scraper Smoke Test
-
-```bash
-cd Scrapper
-python run_scraper.py https://naivas.online/<product-slug>.html
-```
-
-**Naivas**: HTTP 200 fetch confirmed; site-specific parser may fall back to a raw price list if the `text-xl` DOM structure does not match.
-
-**Quickmart / Carrefour**: Fetch or parse failures observed — see Known Issues below.
-
-### Database Seeding
-
-```bash
-cd backend
-python manage.py seed_data
-# Result: Database seeded with 3 supermarkets, 5 branches, 5 products, and branch-specific prices
-```
-
----
-
-## Known Issues & Next Steps
-
-### Scraper (priority)
-
-1. ~~**Quickmart** — Investigate correct product URL patterns; site may return 404 for guessed slugs.~~ **Fixed** — CSS selectors updated to match Growcer's `products-price-new` / `products-price` classes. Search results parser now filters out non-product navigation links. Verified: correctly parses live product pages returning title + price.
-2. **Carrefour** — Site uses Next.js with CDN shielding (Akamai/CloudFront). From non-Kenyan IPs, requests return empty shells or "Access Denied" pages. The scraper now has `cloudscraper` fallback and detects blocked pages explicitly. Works from Kenyan networks where JSON-LD and the OCC API (`/occ/v2/mafken/products/{code}`) are accessible. For full automation, consider Playwright/Selenium or reverse-engineering the Next.js API routes.
-3. ~~**Naivas** — Harden the parser: add JSON-LD / meta-tag extraction (already in generic fallback) as primary strategy; validate against multiple product pages.~~ **Already working** — Naivas parser extracts title from `div.text-xl` and price from `div.product-price`. Verified: live pages return correct title and price (e.g., Brookside Fresh Milk 1L = KES 135).
-4. **Backend integration** — Build a `update_prices` management command that maps scraped `{title, price, currency}` to existing `Product` records and upserts `ProductPrice` with `source_url`.
+## Local Setup
 
 ### Backend
-
-5. **PostgreSQL migration** — Set `DB_HOST` and related vars in `.env`; run migrations against PostgreSQL before deployment.
-6. **Register test** — Use a stronger password (e.g. `Secret123!`) in `users/tests.py` to satisfy Django validators.
-7. **Remove `test_register.py`** from the backend root or move it to a `scripts/` folder so Django's test runner does not import it.
-
-### Frontend
-
-8. **Lint cleanup** — Guard `BuildContext` usage after async gaps; remove unused `_initialized` field.
-9. **Basket persistence** — Currently creates a new basket on every app launch; persist basket ID locally for returning users.
-
----
-
-## How to Run Locally
-
-### Prerequisites
-
-- Python 3.10+ with virtual environment
-- Flutter SDK 3.5+
-- (Optional) PostgreSQL for production database
-
-### Step 1: Backend
 
 ```bash
 cd backend
 python -m venv .venv
-# Windows:
 .venv\Scripts\activate
-# macOS/Linux:
-source .venv/bin/activate
-
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py seed_data
 python manage.py runserver
 ```
 
-API available at `http://127.0.0.1:8000/api/`.
+Optional development seed:
 
-To use PostgreSQL, create a `.env` file in `backend/`:
-```
-DB_HOST=localhost
-DB_NAME=savebasket
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_PORT=5432
-SECRET_KEY=your-secret-key
-DEBUG=True
+```bash
+python manage.py seed_data --dev
 ```
 
-### Step 2: Frontend
+The seeder is guarded by `--dev` and `DEBUG=True`.
+
+### Frontend
 
 ```bash
 cd frontend
@@ -264,30 +258,246 @@ flutter pub get
 flutter run
 ```
 
-Supports Android, iOS, Chrome/Web, and Desktop. Ensure the backend is running first; log in or register to access basket features.
+For web during development:
 
-### Step 3: Scrapper (standalone)
+```bash
+flutter run -d chrome
+```
+
+### Scrapper
 
 ```bash
 cd Scrapper
 python -m venv venv
-# Windows:
 venv\Scripts\activate
 pip install -r requirements.txt
-
-python run_scraper.py "https://naivas.online/<product-page-url>"
+python run_scraper.py "https://www.naivas.online/brookside-fresh-milk-1l"
 ```
-
-Only scrape sites you have permission to access. Respect each site's terms of service and rate limits.
 
 ---
 
-## Architecture Summary
+## Verification
 
-SaveBasket follows a classic three-tier pattern:
+### Backend
 
-1. **Data layer** — Django ORM models (`Supermarket`, `Branch`, `Product`, `ProductPrice`, `Basket`, `BasketItem`) with SQLite/PostgreSQL
-2. **API layer** — Django REST Framework viewsets with JWT authentication and CORS for the Flutter client
-3. **Presentation layer** — Flutter app with Provider state management, responsive Material 3 UI, and platform-aware API routing
+```bash
+cd backend
+.venv\Scripts\python.exe manage.py test products baskets
+```
 
-The scraper is a fourth, independent ingestion pipeline planned to replace static seeded prices with live supermarket data once Quickmart and Carrefour parsers are fixed and a backend sync command is implemented.
+Latest verified result:
+
+```text
+26 tests passed
+```
+
+### Scrapper
+
+```bash
+cd Scrapper
+venv\Scripts\python.exe -m unittest discover -s . -p "test_*.py"
+```
+
+Latest verified result:
+
+```text
+29 tests passed
+```
+
+### Frontend
+
+```bash
+cd frontend
+flutter analyze
+```
+
+Latest verified result:
+
+```text
+No issues found
+```
+
+---
+
+## Current Integration State
+
+```text
+Scrapper ──POST /api/scraper/ingest/──▶ Backend ──REST API──▶ Frontend
+   │                                      │
+   └── JSON snapshots + price history     └── SQLite locally / PostgreSQL-ready
+```
+
+Current status:
+
+- Frontend and backend are connected.
+- Scraper can persist JSON snapshots and push changed products to the backend.
+- Backend stores ingestion history and raw scraped rows.
+- Product matching prevents many duplicate canonical products.
+- Admin review queue surfaces possible duplicates and low-confidence matches.
+- Product images are proxied through the backend for frontend reliability.
+
+---
+
+## Near-Term Improvements
+
+1. Add admin actions or a management command to merge products directly from `ProductImportReview`.
+2. Add a small dashboard for scraper health: last ingestion, failed images, duplicate-review count, and unmatched products.
+3. Cache proxied product images locally instead of fetching remote supermarket images every time.
+4. Persist the active basket ID on the frontend so returning users resume the same basket.
+5. Add store-level explanations for missing products in comparison results.
+6. Expand scraper coverage and keep supermarket parsers behind tests before using them for bulk imports.
+
+---
+
+## Issue Log: Blueband 500g Naivas Price
+
+Date checked: 2026-06-29
+
+### Symptom
+
+Blueband Margarine 500g from Naivas was showing as KES 1,199 instead of the expected KES 275.
+
+### Root Cause
+
+The bad value came from the Naivas scraper before import. The importer preserved the scraped value correctly, but the scraper was reading an unrelated DOM price from the page. The Naivas product page included the correct product price in JSON-LD structured data, but that JSON-LD was HTML-escaped, so the parser skipped it and later saw another product/promo price.
+
+### Fix
+
+- Updated the Naivas parser to prefer product JSON-LD offer prices before broad DOM price scanning.
+- Added support for HTML-escaped JSON-LD.
+- Kept the existing listing-page safeguard that matches product cards by requested URL slug.
+- Canonicalized `Blueband` to `blue band` in product matching so variant-aware identity works across store naming differences.
+- Ensured Blue Band products without an explicit variant, such as Original, Choco, or Vanilla, do not auto-merge into variant-specific products.
+
+### Local Data Repair
+
+The existing local database already contained the old bad scrape, so these rows were corrected:
+
+- `RawScrapedProduct`: Naivas Blueband Margarine 500g changed to KES 275.
+- `StoreProduct`: Naivas Blueband Margarine 500g changed to KES 275.
+- `ProductPrice`: Naivas Blueband Margarine 500g changed to KES 275.
+- Existing `blueband` product brands were canonicalized to `blue band`.
+
+### Verification
+
+```bash
+cd Scrapper
+venv\Scripts\python.exe run_scraper.py "https://www.naivas.online/blueband-margarine-500g"
+```
+
+Verified parser result:
+
+```text
+price: 275.0
+```
+
+Relevant tests:
+
+```bash
+cd Scrapper
+venv\Scripts\python.exe -m unittest test_scraper.py
+
+cd backend
+.venv\Scripts\python.exe manage.py test products.tests_services
+```
+
+Latest verified result:
+
+```text
+Scraper: 31 tests passed
+Backend product services: 29 tests passed
+```
+
+---
+
+## Admin Workflow: Product Import Reviews
+
+Date added: 2026-06-29
+
+The `ProductImportReview` admin queue is now actionable. It is used to resolve possible duplicate products, low-confidence matches, and missing-variant cases without silently merging products during import.
+
+### Accept Review
+
+Use this when the scraped product is confirmed to be the same real-world product as the candidate product.
+
+Admin action:
+
+```text
+Accept: create reviewed alias and merge into candidate
+```
+
+This action:
+
+- Creates or updates a `ProductAlias` with `source=reviewed`.
+- Links the scraped store-specific name to the selected candidate product.
+- Moves the matching `StoreProduct` row to the candidate product.
+- Moves matching `ProductPrice` rows when applicable.
+- Marks the review as `reviewed`.
+- Deletes the duplicate product only when it has no remaining store or price records.
+
+Example:
+
+```text
+Naivas Blueband Margarine 500g
+CleanShelf Blueband Spread 500Gm
+```
+
+can be accepted as aliases for:
+
+```text
+Blue Band Original Spread 500G
+```
+
+After acceptance, the frontend should show one 500g Blue Band product with multiple supermarket prices instead of separate duplicate cards.
+
+### Reject Review
+
+Use this when the scraped product should remain separate.
+
+Admin action:
+
+```text
+Reject: keep products separate
+```
+
+This action:
+
+- Marks the review as `ignored`.
+- Leaves both products unchanged.
+- Does not create aliases.
+- Does not move store or price records.
+
+### Manual Status Actions
+
+The older status-only actions still exist:
+
+```text
+Mark selected reviews as reviewed
+Mark selected reviews as ignored
+Reopen selected reviews
+```
+
+These only update review status. Use the explicit accept/reject actions when the decision should affect product matching data.
+
+### Verification
+
+```bash
+cd backend
+.venv\Scripts\python.exe manage.py test products.tests_services
+.venv\Scripts\python.exe manage.py test products baskets
+```
+
+Latest verified result:
+
+```text
+Product service tests: 31 tests passed
+Products + baskets tests: 40 tests passed
+```
+
+
+#### Default User Credentials 
+
+Username: peru
+Email: peruemanuel6@gmail.com
+Password: SaveBasket@2026#Peru
+Confirm password: SaveBasket@2026#Peru

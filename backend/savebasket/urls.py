@@ -19,7 +19,7 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from supermarkets.views import SupermarketViewSet, BranchViewSet
-from products.views import ProductViewSet, ProductPriceViewSet
+from products.views import ProductViewSet, ProductPriceViewSet, ScraperIngestView, ProductImageProxyView
 from baskets.views import BasketViewSet
 
 router = DefaultRouter()
@@ -31,6 +31,8 @@ router.register(r'baskets', BasketViewSet, basename='basket')
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/products/image-proxy/", ProductImageProxyView.as_view()),
     path("api/", include(router.urls)),
+    path("api/scraper/ingest/", ScraperIngestView.as_view()),
     path("api/auth/", include("users.urls")),
 ]

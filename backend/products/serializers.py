@@ -1,107 +1,77 @@
-"""
-products/serializers.py
------------------------
-Serializers for the `products` app.
-
-This file converts Product and ProductPrice model instances to/from JSON so
-the Flutter app (and any other API clients) can read and write product data.
-
-Models handled:
-  • Product      – a grocery item catalogued in the system (e.g. "Brookside Fresh Milk 1L")
-  • ProductPrice – the price of a specific Product at a specific Branch,
-                   updated whenever our scrapers or admin staff refreshes prices
-"""
-
 from rest_framework import serializers
-from .models import Product, ProductPrice
-from supermarkets.serializers import BranchSerializer  # Reuse branch serializer for nesting
+from .models import Product, ProductPrice, StoreProduct
+from supermarkets.serializers import BranchSerializer
 from supermarkets.models import Branch
+from urllib.parse import quote
+
+
+class StorePriceSerializer(serializers.ModelSerializer):
+    store = serializers.CharField(source='store_name')
+    price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    scraped_image_url = serializers.SerializerMethodField()
+
+    def get_scraped_image_url(self, obj):
+        return proxied_image_url(self.context.get('request'), obj.scraped_image_url)
+
+    class Meta:
+        model = StoreProduct
+        fields = ['store', 'price', 'product_url', 'scraped_image_url']
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    """
-    Serializes the Product model.
+    image_url = serializers.SerializerMethodField()
+    stores = StorePriceSerializer(source='store_products', many=True, read_only=True)
 
-    A Product represents a grocery item that exists independently of any store –
-    it has a name, category, brand, barcode, and optional image. Prices are stored
-    separately in ProductPrice so the same product can have different prices at
-    different supermarket branches.
-
-    Fields exposed:
-      - id          : UUID primary key
-      - name        : Full product name (e.g. "Jogoo Maize Meal 2kg")
-      - sku         : Stock Keeping Unit – internal identifier used by retailers
-      - barcode     : Product barcode (EAN/UPC) – useful for scanning
-      - category    : Grouping label (e.g. "Dairy", "Bakery", "Pantry")
-      - brand       : Manufacturer/brand name (e.g. "Brookside")
-      - image_url   : URL to a product thumbnail image
-      - description : Free-text product description
-
-    This serializer is also reused as a nested object inside ProductPriceSerializer
-    and BasketItemSerializer so product details are always embedded in price and
-    basket responses.
-    """
+    def get_image_url(self, obj):
+        image_url = obj.image_url
+        if not image_url:
+            store_products = list(obj.store_products.all())
+            context_store = self.context.get('store_name')
+            store_product = None
+            if context_store:
+                store_product = next(
+                    (
+                        sp for sp in store_products
+                        if sp.scraped_image_url and sp.store_name.lower() == context_store.lower()
+                    ),
+                    None,
+                )
+            store_product = store_product or next(
+                (sp for sp in store_products if sp.scraped_image_url),
+                None,
+            )
+            image_url = store_product.scraped_image_url if store_product else None
+        return proxied_image_url(self.context.get('request'), image_url)
 
     class Meta:
         model = Product
-        fields = ['id', 'name', 'sku', 'barcode', 'category', 'brand', 'image_url', 'description']
+        fields = ['id', 'name', 'sku', 'barcode', 'category', 'brand', 'variant', 'size', 'unit', 'image_url', 'description', 'stores']
 
 
 class ProductPriceSerializer(serializers.ModelSerializer):
-    """
-    Serializes the ProductPrice model.
-
-    A ProductPrice ties together a Product, a Branch, and a decimal price. It is
-    the core data point that SaveBasket uses to compare how much each supermarket
-    charges for the same item.
-
-    Like BranchSerializer, this uses the dual read/write field pattern:
-
-      product (read):
-        A nested ProductSerializer object embedded in GET responses so the client
-        receives the full product details alongside the price, for example:
-            "product": { "id": "...", "name": "Kabras Sugar 1kg", ... }
-
-      product_id (write):
-        A PrimaryKeyRelatedField for POST/PUT/PATCH requests. The client sends
-        only the product's UUID. DRF resolves it to the Product instance via
-        source='product'. Marked write_only=True so it is invisible in GET responses.
-
-      branch (read):
-        A nested BranchSerializer (which itself nests SupermarketSerializer) so the
-        full branch + supermarket context is always present when reading a price.
-
-      branch_id (write):
-        The Branch UUID used when creating or updating a price record.
-
-    Additional fields:
-      - price       : Decimal price in Kenyan Shillings (KSh)
-      - updated_at  : Timestamp automatically set when the record is saved – shows
-                      how fresh the price data is
-      - source_url  : The web page URL where this price was scraped from (optional),
-                      useful for auditing and re-scraping
-    """
-
-    # Nested read: full product object embedded in the response
     product = ProductSerializer(read_only=True)
-
-    # Flat write: accept just a product UUID when creating/updating a price
     product_id = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.all(),
-        source='product',   # Maps to the 'product' foreign key on ProductPrice
-        write_only=True     # Only used in write operations, hidden from GET responses
+        source='product',
+        write_only=True
     )
-
-    # Nested read: full branch (+ supermarket) object embedded in the response
     branch = BranchSerializer(read_only=True)
-
-    # Flat write: accept just a branch UUID when creating/updating a price
     branch_id = serializers.PrimaryKeyRelatedField(
         queryset=Branch.objects.all(),
-        source='branch',    # Maps to the 'branch' foreign key on ProductPrice
-        write_only=True     # Only used in write operations, hidden from GET responses
+        source='branch',
+        write_only=True
     )
 
     class Meta:
         model = ProductPrice
         fields = ['id', 'product', 'product_id', 'branch', 'branch_id', 'price', 'updated_at', 'source_url']
+
+
+def proxied_image_url(request, image_url):
+    if not image_url:
+        return None
+    if image_url.startswith('/api/products/image-proxy/'):
+        return image_url
+    if request is None:
+        return image_url
+    return request.build_absolute_uri(f"/api/products/image-proxy/?url={quote(image_url, safe='')}")

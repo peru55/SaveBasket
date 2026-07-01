@@ -128,6 +128,14 @@ else:
 
 CORS_ALLOW_ALL_ORIGINS = True
 
+# Optional API key for securing the scraper ingestion endpoint. Set in .env
+SCRAPER_API_KEY = os.getenv("SCRAPER_API_KEY")
+
+# Product import matching thresholds.
+PRODUCT_SIMILARITY_THRESHOLD = float(os.getenv("PRODUCT_SIMILARITY_THRESHOLD", "0.8"))
+PRODUCT_LOW_CONFIDENCE_MATCH_THRESHOLD = float(os.getenv("PRODUCT_LOW_CONFIDENCE_MATCH_THRESHOLD", "0.92"))
+PRODUCT_REVIEW_MIN_SIMILARITY = float(os.getenv("PRODUCT_REVIEW_MIN_SIMILARITY", "0.55"))
+
 
 
 # Password validation

@@ -86,3 +86,21 @@ class BasketComparisonTestCase(TestCase):
         self.assertEqual(comparison[1]['total_items'], 2)
         self.assertEqual(len(comparison[1]['missing_items']), 1)
         self.assertEqual(comparison[1]['missing_items'][0]['name'], "Local Sugar 1kg")
+
+    def test_basket_compare_prices_aggregates_same_supermarket_branches(self):
+        # Naivas has milk at Westlands and sugar at Website. It should be
+        # complete at supermarket level instead of split into two partial rows.
+        naivas_website = Branch.objects.create(supermarket=self.naivas, name="Website")
+        ProductPrice.objects.create(product=self.sugar, branch=naivas_website, price=Decimal("190.00"))
+
+        BasketItem.objects.create(basket=self.basket, product=self.milk, quantity=1)
+        BasketItem.objects.create(basket=self.basket, product=self.sugar, quantity=1)
+
+        comparison = self.basket.compare_prices()
+        naivas_result = next(item for item in comparison if item["supermarket_name"] == "Naivas")
+
+        self.assertTrue(naivas_result["is_complete"])
+        self.assertEqual(naivas_result["items_available"], 2)
+        self.assertEqual(naivas_result["total_items"], 2)
+        self.assertEqual(naivas_result["total_cost"], 295.00)
+        self.assertEqual(naivas_result["branch_name"], "Multiple branches")

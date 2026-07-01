@@ -1,0 +1,21 @@
+{
+  "source": "Naivas",
+  "branch": {
+    "name": "Westlands",
+    "city": "Nairobi"
+  },
+  "products": [
+    {
+      "name": "Brookside Fresh Milk 1L",
+      "price": 135.0,
+      "currency": "KES",
+      "barcode": "0001112223334",
+      "sku": "BRK-MILK-1L",
+      "url": "https://www.naivas.online/brookside-fresh-milk-1l",
+      "brand": "Brookside",
+      "category": "Dairy",
+      "image_url": "https://example.com/images/brookside-milk.jpg",
+      "description": "Fresh milk 1 litre"
+    }
+  ]
+}

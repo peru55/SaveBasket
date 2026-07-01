@@ -1,0 +1,26 @@
+# Example CI scrape jobs. One product URL per line. Comments start with #
+### naivas
+https://www.naivas.online/brookside-fresh-milk-1l
+https://www.naivas.online/elianto-cooking-oil-1ltr
+https://www.naivas.online/elianto-cooking-oil-2ltr
+https://www.naivas.online/blueband-margarine-500g
+https://www.naivas.online/blueband-margarine-250g
+
+### quickmart
+https://www.quickmart.co.ke/products/brookside-fresh-milk-1l
+https://www.quickmart.co.ke/elianto-corn-oil-1l-55
+https://www.quickmart.co.ke/elianto-corn-oil-2lt-10
+https://www.quickmart.co.ke/blue-band-original-spread-500g-52
+https://www.quickmart.co.ke/blue-band-original-spread-250g-51
+
+### carrefour
+# https://www.carrefour.ke/p/1234567890
+
+### cleanshelf
+https://cleanshelf.online/product/aaa-leeks-loose-1kg
+https://cleanshelf.online/product/elianto-1ltr
+https://cleanshelf.online/product/elianto-2ltr
+https://cleanshelf.online/product/blueband-spread-500gm
+https://cleanshelf.online/product/blueband-spread-250gm
+
+# Add more product URLs as desired

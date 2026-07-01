@@ -35,6 +35,72 @@ NAIVAS_PRODUCT_WITH_KSH = """
 </body></html>
 """
 
+NAIVAS_BLUE_BAND_LISTING_HTML = """
+<html><head>
+<meta property="og:title" content="Blue Band Original Spread 500G" />
+</head><body>
+<div class="border border-naivas-bg">
+  <a href="/blue-band-original-spread-2kg-10" title="Blue Band Original Spread 2Kg"></a>
+  <div class="product-price"><span class="font-bold">KES 1,199</span></div>
+</div>
+<div class="border border-naivas-bg">
+  <a href="/blue-band-original-spread-500g-52" title="Blue Band Original Spread 500G"></a>
+  <div class="product-price"><span class="font-bold">KES 275</span></div>
+</div>
+<div class="border border-naivas-bg">
+  <a href="/blue-band-chocolate-spread-500g-53" title="Blue Band Chocolate Spread 500G"></a>
+  <div class="product-price"><span class="font-bold">KES 315</span></div>
+</div>
+</body></html>
+"""
+
+NAIVAS_BLUE_BAND_LISTING_NO_MATCH_HTML = """
+<html><head>
+<meta property="og:title" content="Blue Band Original Spread 500G" />
+</head><body>
+<div class="border border-naivas-bg">
+  <a href="/blue-band-original-spread-2kg-10" title="Blue Band Original Spread 2Kg"></a>
+  <div class="product-price"><span class="font-bold">KES 1,199</span></div>
+</div>
+<div class="border border-naivas-bg">
+  <a href="/blue-band-chocolate-spread-500g-53" title="Blue Band Chocolate Spread 500G"></a>
+  <div class="product-price"><span class="font-bold">KES 315</span></div>
+</div>
+</body></html>
+"""
+
+NAIVAS_BLUEBAND_DETAIL_WITH_UNRELATED_DOM_PRICE = """
+<html><head>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org/",
+  "@type": "Product",
+  "name": "Blueband Margarine 500g",
+  "offers": {
+    "@type": "Offer",
+    "priceCurrency": "KES",
+    "price": "275.0000"
+  }
+}
+</script>
+<meta property="og:title" content="Blueband Margarine 500g" />
+</head><body>
+<div class="text-xl mb-1">Blueband Margarine 500g</div>
+<aside>
+  <div class="product-price"><span class="font-bold">KES 1,199</span></div>
+</aside>
+</body></html>
+"""
+
+NAIVAS_BLUEBAND_DETAIL_WITH_ESCAPED_JSON_LD = r"""
+<html><head>
+<script type="application/ld+json">{&quot;@context&quot;:&quot;https:\/\/schema.org\/&quot;,&quot;@type&quot;:&quot;Product&quot;,&quot;name&quot;:&quot;Blueband Margarine 500g&quot;,&quot;offers&quot;:{&quot;@type&quot;:&quot;Offer&quot;,&quot;priceCurrency&quot;:&quot;KES&quot;,&quot;price&quot;:&quot;275.0000&quot;}}</script>
+<meta property="og:title" content="Blueband Margarine 500g" />
+</head><body>
+<div class="product-price"><span class="font-bold">KES 1,199</span></div>
+</body></html>
+"""
+
 QUICKMART_PRODUCT_HTML = """
 <html><head>
 <meta property="og:title" content="Brookside Uht Fino Carton 500Ml" />
@@ -209,6 +275,43 @@ class ScraperParserTests(unittest.TestCase):
         self.assertEqual(result["title"], "Fresh Bread")
         self.assertEqual(result["price"], 65.0)
         self.assertEqual(result["currency"], "KES")
+
+    def test_naivas_listing_page_selects_requested_product_card_price(self):
+        result = self.scraper.parse_site(
+            "https://www.naivas.online/blue-band-original-spread-500g-52",
+            NAIVAS_BLUE_BAND_LISTING_HTML,
+        )
+        self.assertEqual(result["title"], "Blue Band Original Spread 500G")
+        self.assertEqual(result["price"], 275.0)
+
+    def test_naivas_listing_page_does_not_fallback_to_unrelated_price(self):
+        original_fetch = self.scraper.fetch
+        self.scraper.fetch = lambda url: NAIVAS_BLUE_BAND_LISTING_NO_MATCH_HTML
+        try:
+            result = self.scraper.parse_site(
+                "https://www.naivas.online/blue-band-original-spread-500g-52",
+                NAIVAS_BLUE_BAND_LISTING_NO_MATCH_HTML,
+            )
+        finally:
+            self.scraper.fetch = original_fetch
+        self.assertIsNone(result["price"])
+
+    def test_naivas_detail_prefers_json_ld_offer_over_unrelated_dom_price(self):
+        result = self.scraper.parse_site(
+            "https://www.naivas.online/blueband-margarine-500g",
+            NAIVAS_BLUEBAND_DETAIL_WITH_UNRELATED_DOM_PRICE,
+        )
+        self.assertEqual(result["title"], "Blueband Margarine 500g")
+        self.assertEqual(result["price"], 275.0)
+        self.assertEqual(result["currency"], "KES")
+
+    def test_naivas_detail_parses_escaped_json_ld_offer(self):
+        result = self.scraper.parse_site(
+            "https://www.naivas.online/blueband-margarine-500g",
+            NAIVAS_BLUEBAND_DETAIL_WITH_ESCAPED_JSON_LD,
+        )
+        self.assertEqual(result["title"], "Blueband Margarine 500g")
+        self.assertEqual(result["price"], 275.0)
 
     def test_quickmart_product_page(self):
         result = self.scraper.parse_site(

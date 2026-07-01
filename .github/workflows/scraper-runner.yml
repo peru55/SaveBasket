@@ -1,0 +1,49 @@
+name: Scraper scheduled runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: 'Newline-separated URLs to scrape (overrides default jobs)'
+        required: false
+        default: ''
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 06:00 UTC
+
+jobs:
+  run-scrapers:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: scraper-runner
+      cancel-in-progress: false
+    env:
+      BACKEND_URL: ${{ secrets.SCRAPER_BACKEND_URL }}
+      SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install system deps (for lxml/playwright)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-dev libxslt1-dev libnss3 libatk1.0-0 libatk-bridge2.0-0 libgtk-3-0 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libasound2 libgbm-dev
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r Scrapper/requirements.txt
+
+      - name: Install Playwright browsers
+        run: |
+          python -m playwright install --with-deps
+
+      - name: Run scraper CI runner
+        env:
+          JOB_URLS: ${{ github.event.inputs.urls }}
+        run: |
+          python Scrapper/ci_runner.py --backend "${{ env.BACKEND_URL }}" --key "${{ env.SCRAPER_API_KEY }}" --urls "${{ env.JOB_URLS }}"

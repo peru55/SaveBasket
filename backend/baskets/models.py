@@ -28,49 +28,67 @@ class Basket(models.Model):
         # Fetch all prices for these products
         prices = ProductPrice.objects.filter(product_id__in=product_ids).select_related('branch', 'branch__supermarket')
         
-        # Group prices by branch
-        branch_prices = {}
+        # Group prices by supermarket, choosing the cheapest branch/channel price
+        # for each product. Scraper imports may put online prices under "Website"
+        # while seed/admin data may use a physical branch such as "Westlands".
+        # The shopper-facing comparison is supermarket-level, so splitting these
+        # channels would incorrectly show a supermarket as partial.
+        supermarket_prices = {}
         for price_obj in prices:
-            branch_id = price_obj.branch_id
-            if branch_id not in branch_prices:
-                branch_prices[branch_id] = {
-                    'branch': price_obj.branch,
+            supermarket_id = price_obj.branch.supermarket_id
+            if supermarket_id not in supermarket_prices:
+                supermarket_prices[supermarket_id] = {
+                    'supermarket': price_obj.branch.supermarket,
                     'prices': {}
                 }
-            branch_prices[branch_id]['prices'][price_obj.product_id] = price_obj.price
+            current = supermarket_prices[supermarket_id]['prices'].get(price_obj.product_id)
+            if current is None or price_obj.price < current['price']:
+                supermarket_prices[supermarket_id]['prices'][price_obj.product_id] = {
+                    'price': price_obj.price,
+                    'branch': price_obj.branch,
+                }
 
         comparison = []
-        for branch_id, data in branch_prices.items():
-            branch = data['branch']
+        for supermarket_id, data in supermarket_prices.items():
+            supermarket = data['supermarket']
             prices_dict = data['prices']
             
             total_cost = 0
             items_available = 0
             missing_items = []
+            selected_branches = set()
             
             for item in basket_items:
                 prod_id = item.product_id
                 if prod_id in prices_dict:
-                    total_cost += prices_dict[prod_id] * item.quantity
+                    selected_price = prices_dict[prod_id]
+                    total_cost += selected_price['price'] * item.quantity
                     items_available += 1
+                    selected_branches.add(selected_price['branch'].name)
                 else:
                     missing_items.append({
                         'id': str(prod_id),
                         'name': item.product.name
                     })
+
+            branch_name = (
+                next(iter(selected_branches))
+                if len(selected_branches) == 1
+                else "Multiple branches"
+            )
             
             comparison.append({
-                'branch_id': str(branch.id),
-                'branch_name': branch.name,
-                'supermarket_name': branch.supermarket.name,
-                'logo_url': branch.supermarket.logo_url,
+                'branch_id': str(supermarket_id),
+                'branch_name': branch_name,
+                'supermarket_name': supermarket.name,
+                'logo_url': supermarket.logo_url,
                 'total_cost': float(total_cost),
                 'items_available': items_available,
                 'total_items': basket_items.count(),
                 'is_complete': items_available == basket_items.count(),
                 'missing_items': missing_items,
-                'latitude': float(branch.latitude) if branch.latitude else None,
-                'longitude': float(branch.longitude) if branch.longitude else None,
+                'latitude': None,
+                'longitude': None,
             })
             
         # Sort comparison by total cost (ascending), with completed baskets prioritized

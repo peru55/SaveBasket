@@ -12,6 +12,9 @@ venv/
 scraper_cache.sqlite
 *.sqlite
 
+# Generated scraper snapshots
+data/
+
 # Debug and ephemeral test files
 _debug_*.py
 _test_*.py
