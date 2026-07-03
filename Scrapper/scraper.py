@@ -17,6 +17,7 @@ from naivas import parse_naivas
 from quickmart import parse_quickmart
 from carrefour import parse_carrefour
 from cleanshelf import parse_cleanshelf
+from eastmatt import parse_eastmatt
 from product import source_from_domain, validate_product
 
 try:
@@ -42,6 +43,7 @@ SITE_PARSERS = (
     ("quickmart.co.ke", "Quickmart", parse_quickmart),
     ("carrefour.ke", "Carrefour", parse_carrefour),
     ("cleanshelf.online", "CleanShelf", parse_cleanshelf),
+    ("eastmatt.com", "EastMatt", parse_eastmatt),
 )
 
 # Matches Kenyan price formats: 135, 135.00, 1,350, 1,350.00, 1500, 1500.00
@@ -82,6 +84,7 @@ class EthicalScraper:
             "naivas.online": 30,
             "cleanshelf.online": 30,
             "api.cleanshelf.online": 30,
+            "eastmatt.com": 30,
         }
         self.default_timeout = 15
 

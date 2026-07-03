@@ -53,6 +53,47 @@ class ProductSearchSerializationTests(TestCase):
             {"Carrefour", "Naivas", "Quickmart"},
         )
 
+    def test_search_flour_returns_canonical_flour_variants(self):
+        maize_flour = Product.objects.create(
+            name="Jogoo Maize Flour 2kg",
+            normalized_name="jogoo maize flour 2kg",
+            brand="jogoo",
+            canonical_category="maize flour",
+        )
+        wheat_flour = Product.objects.create(
+            name="Exe Wheat Flour 2kg",
+            normalized_name="exe wheat flour 2kg",
+            brand="exe",
+            canonical_category="wheat flour",
+        )
+
+        response = APIClient().get("/api/products/", {"search": "flour"})
+
+        self.assertEqual(response.status_code, 200)
+        result_ids = {item["id"] for item in response.data}
+        self.assertIn(str(self.product.id), result_ids)
+        self.assertIn(str(maize_flour.id), result_ids)
+        self.assertIn(str(wheat_flour.id), result_ids)
+
+    def test_search_flour_checks_store_product_names(self):
+        product = Product.objects.create(
+            name="Ajab Baking Staple",
+            normalized_name="ajab baking staple",
+            brand="ajab",
+        )
+        StoreProduct.objects.create(
+            product=product,
+            store_name="Naivas",
+            store_product_name="Ajab Wheat Flour 2kg",
+            price=Decimal("210.00"),
+        )
+
+        response = APIClient().get("/api/products/", {"search": "flour"})
+
+        self.assertEqual(response.status_code, 200)
+        result_ids = {item["id"] for item in response.data}
+        self.assertIn(str(product.id), result_ids)
+
     def test_search_returns_proxied_product_image_url(self):
         self.product.image_url = "https://cfn.quickmart.co.ke/example.png"
         self.product.save()

@@ -5,6 +5,11 @@ https://www.naivas.online/elianto-cooking-oil-1ltr
 https://www.naivas.online/elianto-cooking-oil-2ltr
 https://www.naivas.online/blueband-margarine-500g
 https://www.naivas.online/blueband-margarine-250g
+https://www.naivas.online/pembe-maize-meal-2kg
+https://www.naivas.online/kabras-packed-sugar-white-1kg
+https://www.naivas.online/kabras-packed-sugar-white-2kg
+https://www.naivas.online/jameson-black-barrel-750ml
+
 
 ### quickmart
 https://www.quickmart.co.ke/products/brookside-fresh-milk-1l
@@ -12,6 +17,11 @@ https://www.quickmart.co.ke/elianto-corn-oil-1l-55
 https://www.quickmart.co.ke/elianto-corn-oil-2lt-10
 https://www.quickmart.co.ke/blue-band-original-spread-500g-52
 https://www.quickmart.co.ke/blue-band-original-spread-250g-51
+https://www.quickmart.co.ke/pembe-maize-flour-2kg-44
+https://www.quickmart.co.ke/pembe-maize-flour-1kg-13
+https://www.quickmart.co.ke/kabras-sugar-white-2kg-38  
+# sugar 1kg unavailable 
+https://www.quickmart.co.ke/jameson-black-barrel-irish-whiskey-%E2%80%93-750ml-10
 
 ### carrefour
 # https://www.carrefour.ke/p/1234567890
@@ -22,5 +32,22 @@ https://cleanshelf.online/product/elianto-1ltr
 https://cleanshelf.online/product/elianto-2ltr
 https://cleanshelf.online/product/blueband-spread-500gm
 https://cleanshelf.online/product/blueband-spread-250gm
+https://cleanshelf.online/product/pembe-maize-1kg
+# https://cleanshelf.online/product/pembe-maize-2kg maize flour 2kg unavailable
+https://cleanshelf.online/product/kabras-sugar-2kg
+https://cleanshelf.online/product/kabras-sugar-1kg
+https://cleanshelf.online/product/jameson-black-barrel-750ml
+
+### eastmatt
+https://eastmatt.com/item-details.php?ItemID=130137
+https://eastmatt.com/item-details.php?ItemID=130252
+https://eastmatt.com/item-details.php?ItemID=120068 #pembe maize flour
+https://eastmatt.com/item-details.php?ItemID=190105 #kabras sugar 2kg
+https://eastmatt.com/item-details.php?ItemID=190104 #kabras sugar 1kg
+
+
+
+### foodplus chandarana
+
 
 # Add more product URLs as desired

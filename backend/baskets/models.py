@@ -56,19 +56,37 @@ class Basket(models.Model):
             total_cost = 0
             items_available = 0
             missing_items = []
+            product_breakdown = []
             selected_branches = set()
             
             for item in basket_items:
                 prod_id = item.product_id
                 if prod_id in prices_dict:
                     selected_price = prices_dict[prod_id]
-                    total_cost += selected_price['price'] * item.quantity
+                    subtotal = selected_price['price'] * item.quantity
+                    total_cost += subtotal
                     items_available += 1
                     selected_branches.add(selected_price['branch'].name)
+                    product_breakdown.append({
+                        'id': str(prod_id),
+                        'name': item.product.name,
+                        'quantity': item.quantity,
+                        'unit_price': float(selected_price['price']),
+                        'subtotal': float(subtotal),
+                        'in_stock': True,
+                    })
                 else:
                     missing_items.append({
                         'id': str(prod_id),
                         'name': item.product.name
+                    })
+                    product_breakdown.append({
+                        'id': str(prod_id),
+                        'name': item.product.name,
+                        'quantity': item.quantity,
+                        'unit_price': None,
+                        'subtotal': 0,
+                        'in_stock': False,
                     })
 
             branch_name = (
@@ -87,6 +105,7 @@ class Basket(models.Model):
                 'total_items': basket_items.count(),
                 'is_complete': items_available == basket_items.count(),
                 'missing_items': missing_items,
+                'product_breakdown': product_breakdown,
                 'latitude': None,
                 'longitude': None,
             })

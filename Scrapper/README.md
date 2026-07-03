@@ -14,6 +14,7 @@ The scraper is intentionally conservative: it respects robots rules where availa
 | Quickmart | `quickmart.co.ke` | Growcer storefront; scraper sets a default Nairobi delivery location |
 | CleanShelf | `cleanshelf.online` | API/category helpers and product parser |
 | Carrefour | `carrefour.ke` | HTML/JSON-LD/OCC parsing where access is allowed; may be blocked by CDN/network rules |
+| EastMatt | `eastmatt.com` | Product parser using JSON-LD/WooCommerce-style HTML selectors |
 
 ---
 
@@ -287,6 +288,7 @@ These must stay separate because their sizes differ.
 | `quickmart.py` | Quickmart parser and search fallback |
 | `cleanshelf.py` | CleanShelf parser and API helpers |
 | `carrefour.py` | Carrefour parser, JSON-LD, and OCC fallback |
+| `eastmatt.py` | EastMatt parser |
 | `json_store.py` | Local JSON snapshots and price history |
 | `run_scraper.py` | One-product scrape command |
 | `ci_runner.py` | Batch job runner using `ci_jobs.txt` |

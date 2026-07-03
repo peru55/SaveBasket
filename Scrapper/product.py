@@ -13,6 +13,7 @@ SOURCE_BY_DOMAIN = {
     "carrefour.ke": "Carrefour",
     "cleanshelf.online": "CleanShelf",
     "api.cleanshelf.online": "CleanShelf",
+    "eastmatt.com": "EastMatt",
 }
 
 

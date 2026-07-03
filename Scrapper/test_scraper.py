@@ -187,6 +187,44 @@ CLEANSHELF_PRODUCT_HTML = """
 </body></html>
 """
 
+EASTMATT_PRODUCT_HTML = """
+<html><head>
+<meta property="og:title" content="Elianto Corn Oil 1L" />
+<meta property="og:image" content="https://eastmatt.com/wp-content/uploads/elianto.jpg" />
+</head><body>
+<div class="product">
+  <h1 class="product_title entry-title">Elianto Corn Oil 1L</h1>
+  <p class="price">
+    <del><span class="woocommerce-Price-amount"><bdi>KSh 650.00</bdi></span></del>
+    <ins><span class="woocommerce-Price-amount"><bdi>KSh 599.00</bdi></span></ins>
+  </p>
+  <button>Add to cart</button>
+</div>
+</body></html>
+"""
+
+EASTMATT_ITEM_DETAILS_HTML = """
+<html><head><title>EastMatt</title></head><body>
+<div class="nav-item dropdown mega-dropdown me-3">
+  <div class="category-item">BUCKETS</div>
+</div>
+<div class="product-detail accordion-detail">
+  <img src="https://eastmatt.com/ios1/itemimages/130252.jpg" alt="DAAWAT LONG GRAIN RICE 5KG" />
+  <div class="detail-info pr-30 pl-30">
+    <h2 class="title-detail">Daawat Long Grain Rice 5kg</h2>
+    <div class="clearfix product-price-cover">
+      <div class="product-price primary-color float-left">
+        <span class="current-price text-brand">KSHS 799.00</span>
+        <span class="save-price font-md color3 ml-15">-7% OFF</span>
+        <span class="old-price font-md ml-15">KSHS 855.00</span>
+      </div>
+    </div>
+    <button>Add to Cart</button>
+  </div>
+</div>
+</body></html>
+"""
+
 
 class FakeCleanShelfScraper:
     def __init__(self, pages):
@@ -351,6 +389,27 @@ class ScraperParserTests(unittest.TestCase):
         )
         self.assertIn("Premium Rice", result["title"])
         self.assertEqual(result["price"], 1200.0)
+
+    def test_eastmatt_product_page_prefers_sale_price(self):
+        result = self.scraper.parse_site(
+            "https://eastmatt.com/product/elianto-corn-oil-1l/",
+            EASTMATT_PRODUCT_HTML,
+        )
+        self.assertEqual(result["name"], "Elianto Corn Oil 1L")
+        self.assertEqual(result["price"], 599.0)
+        self.assertEqual(result["currency"], "KES")
+        self.assertEqual(result["source"], "EastMatt")
+        self.assertEqual(result["availability"], "in_stock")
+
+    def test_eastmatt_item_details_ignores_menu_category_name(self):
+        result = self.scraper.parse_site(
+            "https://eastmatt.com/item-details.php?ItemID=130252",
+            EASTMATT_ITEM_DETAILS_HTML,
+        )
+        self.assertEqual(result["name"], "Daawat Long Grain Rice 5kg")
+        self.assertEqual(result["price"], 799.0)
+        self.assertEqual(result["source"], "EastMatt")
+        self.assertEqual(result["image_url"], "https://eastmatt.com/ios1/itemimages/130252.jpg")
 
     def test_cleanshelf_api_item_mapping(self):
         result = product_from_api_item(CLEANSHELF_PRODUCT_API_ITEM)

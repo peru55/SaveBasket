@@ -27,10 +27,30 @@ class ProductViewSet(viewsets.ModelViewSet):
         
         if search:
             norm_search = ProductMatchService.normalize_name(search)
-            query = Q(name__icontains=search) | Q(brand__icontains=search) | Q(description__icontains=search)
+            canonical_category = ProductMatchService.extract_canonical_category(norm_search)
+            query = (
+                Q(name__icontains=search)
+                | Q(brand__icontains=search)
+                | Q(description__icontains=search)
+                | Q(category__icontains=search)
+                | Q(canonical_category__icontains=search)
+                | Q(variant__icontains=search)
+                | Q(size__icontains=search)
+                | Q(unit__icontains=search)
+                | Q(store_products__store_product_name__icontains=search)
+                | Q(store_products__store_name__icontains=search)
+                | Q(aliases__raw_name__icontains=search)
+            )
             if norm_search:
-                query |= Q(normalized_name__icontains=norm_search)
-            queryset = queryset.filter(query)
+                query |= (
+                    Q(normalized_name__icontains=norm_search)
+                    | Q(canonical_category__icontains=norm_search)
+                    | Q(aliases__normalized_name__icontains=norm_search)
+                    | Q(store_products__store_product_name__icontains=norm_search)
+                )
+            if canonical_category:
+                query |= Q(canonical_category__icontains=canonical_category)
+            queryset = queryset.filter(query).distinct()
         if category:
             queryset = queryset.filter(category__iexact=category)
             
