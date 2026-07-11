@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../providers/supermarket_provider.dart';
 import 'login_screen.dart';
 import '../providers/basket_provider.dart';
+import '../services/api_exception.dart';
 import '../theme/app_theme.dart';
 import 'search_screen.dart';
 import 'basket_screen.dart';
@@ -327,7 +328,7 @@ class _DashboardTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (provider.errorMessage != null && provider.activeBasket == null) {
+    if (provider.backendError != null && provider.activeBasket == null) {
       return _OfflineState(provider: provider);
     }
 
@@ -980,6 +981,22 @@ class _OfflineState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final error = provider.backendError!;
+    final isAuthentication = error.kind == ApiErrorKind.authentication;
+    final isConnection = error.kind == ApiErrorKind.connection;
+    final icon = isAuthentication
+        ? Icons.lock_clock_rounded
+        : isConnection
+            ? Icons.cloud_off_rounded
+            : Icons.warning_amber_rounded;
+    final actionLabel = isAuthentication
+        ? 'Sign in again'
+        : isConnection
+            ? 'Reconnect'
+            : 'Try again';
+    final actionIcon =
+        isAuthentication ? Icons.login_rounded : Icons.refresh_rounded;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -987,22 +1004,24 @@ class _OfflineState extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.cloud_off_rounded,
-                  size: 52, color: AppColors.coral),
+              Icon(icon, size: 52, color: AppColors.coral),
               const SizedBox(height: 14),
-              Text('Backend offline',
-                  style: Theme.of(context).textTheme.titleLarge),
+              Text(error.title, style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               Text(
-                provider.errorMessage!,
+                error.message,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 18),
               FilledButton.icon(
-                onPressed: provider.initializeBasket,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Reconnect'),
+                onPressed: isAuthentication
+                    ? () async {
+                        await context.read<AuthProvider>().logout();
+                      }
+                    : provider.initializeBasket,
+                icon: Icon(actionIcon),
+                label: Text(actionLabel),
               ),
             ],
           ),

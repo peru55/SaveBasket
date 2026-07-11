@@ -8,6 +8,200 @@ SaveBasket is a grocery savings platform for comparing basket prices across Keny
 
 ---
 
+## Verified Local State — 12 July 2026
+
+The current local backend uses PostgreSQL rather than SQLite:
+
+```text
+Database engine: PostgreSQL
+Database host:   127.0.0.1
+Database port:   5433
+Django address:  http://127.0.0.1:8000
+```
+
+At verification time, the PostgreSQL schema was fully migrated but the database
+contained no users, superusers, supermarkets, products, prices, baskets, or
+ingestion runs. This is expected after switching to a new database: migrations
+create tables, but they do not copy users or catalog data from the old SQLite
+database.
+
+### Local PostgreSQL settings
+
+Keep real values in the ignored `backend/.env` file. Use placeholders in shared
+documentation:
+
+```env
+DEBUG=True
+SECRET_KEY=<generated-local-django-key>
+ALLOWED_HOSTS=localhost,127.0.0.1
+CORS_ALLOWED_ORIGINS=http://localhost:3000
+SCRAPER_API_KEY=<generated-scraper-key>
+
+DB_NAME=<local-database-name>
+DB_USER=<local-database-user>
+DB_PASSWORD=<local-database-password>
+DB_HOST=127.0.0.1
+DB_PORT=5433
+```
+
+See `docs/deployment.md` for production secret generation and storage.
+
+### Verify PostgreSQL and migrations
+
+From the repository root:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe manage.py check
+.\.venv\Scripts\python.exe manage.py showmigrations --plan
+```
+
+Every required migration should have an `[X]` marker. Confirm PostgreSQL port
+`5433` is reachable:
+
+```powershell
+Test-NetConnection 127.0.0.1 -Port 5433
+```
+
+If models changed but migrations were not created:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py makemigrations
+.\.venv\Scripts\python.exe manage.py migrate
+```
+
+### Create or repair the Django admin account
+
+`DJANGO_SUPERUSER_*` variables do not create an account merely by existing in
+`.env`. They are only inputs when `createsuperuser --noinput` is executed. A
+superuser from SQLite also does not exist automatically in PostgreSQL.
+
+The recommended local setup is interactive so the password is never placed in
+shell history or documentation:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe manage.py createsuperuser
+```
+
+Enter a new username, email, and password at the prompts. Then open:
+
+```text
+http://127.0.0.1:8000/admin/
+```
+
+If the username already exists but the password is wrong, reset it:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py changepassword <username>
+```
+
+For automation, set `DJANGO_SUPERUSER_USERNAME`, `DJANGO_SUPERUSER_EMAIL`, and
+`DJANGO_SUPERUSER_PASSWORD` in the process environment and run this once:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py createsuperuser --noinput
+```
+
+That command is not idempotent when the username already exists. Use
+`changepassword` for an existing account. Never run superuser creation from
+normal application startup.
+
+Verify that superusers exist without printing credentials:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py shell -c "from django.contrib.auth import get_user_model; U=get_user_model(); print(list(U.objects.filter(is_superuser=True).values('username','is_staff','is_active')))"
+```
+
+### Start and verify Django
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe manage.py runserver
+```
+
+In another PowerShell window:
+
+```powershell
+Test-NetConnection 127.0.0.1 -Port 8000
+```
+
+### Seed PostgreSQL through the scraper
+
+The backend must be running first. The command-line key must exactly match
+`SCRAPER_API_KEY` in `backend/.env`.
+
+Push one freshly scraped product:
+
+```powershell
+cd Scrapper
+python run_scraper.py "PRODUCT_URL" --backend http://127.0.0.1:8000 --key YOUR_SCRAPER_API_KEY
+```
+
+Example using one of the maintained Naivas jobs:
+
+```powershell
+python run_scraper.py "https://www.naivas.online/brookside-fresh-milk-1l" --backend http://127.0.0.1:8000 --key YOUR_SCRAPER_API_KEY
+```
+
+Run all active URLs in `Scrapper/ci_jobs.txt`:
+
+```powershell
+python ci_runner.py --list-jobs
+python ci_runner.py --backend http://127.0.0.1:8000 --key YOUR_SCRAPER_API_KEY
+```
+
+Push products already stored in the scraper JSON store without scraping them
+again:
+
+```powershell
+python sync_json_to_backend.py --backend http://127.0.0.1:8000 --key YOUR_SCRAPER_API_KEY
+```
+
+The ingestion endpoint creates or updates supermarkets, website branches,
+canonical products, store products, prices, raw scraped rows, and ingestion
+history. Some uncertain matches may enter the Django admin review queue.
+
+Verify record counts after ingestion:
+
+```powershell
+cd ..\backend
+.\.venv\Scripts\python.exe manage.py shell -c "from supermarkets.models import Supermarket,Branch; from products.models import Product,ProductPrice,RawScrapedProduct,IngestionHistory; print({'supermarkets':Supermarket.objects.count(),'branches':Branch.objects.count(),'products':Product.objects.count(),'prices':ProductPrice.objects.count(),'raw':RawScrapedProduct.objects.count(),'ingestions':IngestionHistory.objects.count()})"
+```
+
+### Frontend recovery after changing databases
+
+JWTs saved by the Flutter app can refer to a user that existed in SQLite but
+does not exist in PostgreSQL. The backend may be online while basket creation
+returns `401` or `403`.
+
+The frontend now distinguishes these cases:
+
+- **Session expired** — Django responded with `401/403`. Sign out or clear the
+  site's local storage, recreate/register the user in PostgreSQL, and sign in
+  again.
+- **Backend offline** — no HTTP response was received. Start Django and verify
+  the API address and port.
+- **Backend error** — Django responded with another failure. Check the runserver
+  console, migrations, and database connection.
+
+For Flutter web, clear stored tokens through the browser's site-data controls
+for the local frontend origin, reload the page, and sign in again.
+
+### Troubleshooting quick reference
+
+| Symptom | Likely cause | Recovery |
+| --- | --- | --- |
+| Admin login rejects a previously working account | Account existed only in SQLite | Run `createsuperuser` against PostgreSQL |
+| Admin username exists but password fails | Password changed or was entered incorrectly | Run `changepassword <username>` |
+| `Session expired` in Flutter | Stored JWT refers to a missing PostgreSQL user | Log out/clear site data, recreate the user, sign in |
+| `Backend offline` in Flutter | No process reachable at the configured API origin | Start `runserver`; test port `8000` |
+| `Backend error` in Flutter | Django returned a non-authentication error | Read server logs; run checks and migrations |
+| Scraper returns `403` | Missing or mismatched scraper key | Pass the same `SCRAPER_API_KEY` with `--key` |
+| Product search is empty | New database has no catalog rows | Run one-product, batch, or JSON ingestion |
+
+---
+
 ## Current Project Structure
 
 ```text
@@ -23,7 +217,9 @@ SaveBasket/
 
 ## Backend
 
-The backend is a Django 5 API using Django REST Framework, JWT auth, and SQLite for local development. It can switch to PostgreSQL through `.env` database settings.
+The backend is a Django 5 API using Django REST Framework and JWT auth. The
+current local environment uses PostgreSQL at `127.0.0.1:5433`; SQLite remains a
+fallback only when `DB_HOST` is not configured.
 
 ### Apps
 
