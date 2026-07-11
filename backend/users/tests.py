@@ -12,7 +12,7 @@ class AuthTests(TestCase):
         self.baskets_url = '/api/baskets/'
 
     def test_register_creates_user(self):
-        data = {'username': 'tester', 'email': 't@example.com', 'password': 'secret123'}
+        data = {'username': 'tester', 'email': 't@example.com', 'password': 'S4veBasket-Test-Only!2026'}
         resp = self.client.post(self.register_url, data, format='json')
         self.assertEqual(resp.status_code, 201)
         self.assertTrue(User.objects.filter(username='tester').exists())
