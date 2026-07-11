@@ -1,14 +1,20 @@
 import 'dart:convert';
+import 'dart:io' show SocketException;
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
+import 'api_exception.dart';
 import 'auth_service.dart';
 import '../models/product.dart';
 import '../models/supermarket.dart';
 import '../models/basket.dart';
 
 class ApiService {
-  final http.Client _client = http.Client();
-  final AuthService _auth = AuthService();
+  final http.Client _client;
+  final AuthService _auth;
+
+  ApiService({http.Client? client, AuthService? authService})
+      : _client = client ?? http.Client(),
+        _auth = authService ?? AuthService();
 
   static String get baseUrl => ApiConfig.apiBaseUrl;
 
@@ -63,14 +69,47 @@ class ApiService {
   }
 
   Future<Basket> createBasket(String name) async {
-    final resp = await _withAuth(() async {
-      final token = await _auth.getAccessToken();
-      final headers = {'Content-Type': 'application/json'};
-      if (token != null) headers['Authorization'] = 'Bearer $token';
-      return _client.post(Uri.parse('$baseUrl/baskets/'), headers: headers, body: json.encode({'name': name}));
-    });
-    if (resp.statusCode == 201) return Basket.fromJson(json.decode(utf8.decode(resp.bodyBytes)));
-    throw Exception('Failed to create basket');
+    try {
+      final resp = await _withAuth(() async {
+        final token = await _auth.getAccessToken();
+        final headers = {'Content-Type': 'application/json'};
+        if (token != null) headers['Authorization'] = 'Bearer $token';
+        return _client.post(
+          Uri.parse('$baseUrl/baskets/'),
+          headers: headers,
+          body: json.encode({'name': name}),
+        );
+      });
+      if (resp.statusCode == 201) {
+        return Basket.fromJson(json.decode(utf8.decode(resp.bodyBytes)));
+      }
+      if (resp.statusCode == 401 || resp.statusCode == 403) {
+        throw ApiException(
+          ApiErrorKind.authentication,
+          'Your session is no longer valid.',
+          statusCode: resp.statusCode,
+        );
+      }
+      throw ApiException(
+        ApiErrorKind.server,
+        'The backend could not initialize your basket.',
+        statusCode: resp.statusCode,
+      );
+    } on ApiException {
+      rethrow;
+    } on http.ClientException catch (error) {
+      throw ApiException(
+        ApiErrorKind.connection,
+        'Could not connect to the backend.',
+        cause: error,
+      );
+    } on SocketException catch (error) {
+      throw ApiException(
+        ApiErrorKind.connection,
+        'Could not connect to the backend.',
+        cause: error,
+      );
+    }
   }
 
   Future<Basket> getBasket(String basketId) async {
@@ -78,20 +117,28 @@ class ApiService {
       final token = await _auth.getAccessToken();
       final headers = <String, String>{};
       if (token != null) headers['Authorization'] = 'Bearer $token';
-      return _client.get(Uri.parse('$baseUrl/baskets/$basketId/'), headers: headers);
+      return _client.get(Uri.parse('$baseUrl/baskets/$basketId/'),
+          headers: headers);
     });
-    if (resp.statusCode == 200) return Basket.fromJson(json.decode(utf8.decode(resp.bodyBytes)));
+    if (resp.statusCode == 200) {
+      return Basket.fromJson(json.decode(utf8.decode(resp.bodyBytes)));
+    }
     throw Exception('Failed to load basket');
   }
 
-  Future<Basket> addItemToBasket(String basketId, String productId, int quantity) async {
+  Future<Basket> addItemToBasket(
+      String basketId, String productId, int quantity) async {
     final resp = await _withAuth(() async {
       final token = await _auth.getAccessToken();
       final headers = {'Content-Type': 'application/json'};
       if (token != null) headers['Authorization'] = 'Bearer $token';
-      return _client.post(Uri.parse('$baseUrl/baskets/$basketId/add_item/'), headers: headers, body: json.encode({'product_id': productId, 'quantity': quantity}));
+      return _client.post(Uri.parse('$baseUrl/baskets/$basketId/add_item/'),
+          headers: headers,
+          body: json.encode({'product_id': productId, 'quantity': quantity}));
     });
-    if (resp.statusCode == 200) return Basket.fromJson(json.decode(utf8.decode(resp.bodyBytes)));
+    if (resp.statusCode == 200) {
+      return Basket.fromJson(json.decode(utf8.decode(resp.bodyBytes)));
+    }
     throw Exception('Failed to add item to basket');
   }
 
@@ -100,20 +147,29 @@ class ApiService {
       final token = await _auth.getAccessToken();
       final headers = {'Content-Type': 'application/json'};
       if (token != null) headers['Authorization'] = 'Bearer $token';
-      return _client.post(Uri.parse('$baseUrl/baskets/$basketId/remove_item/'), headers: headers, body: json.encode({'product_id': productId}));
+      return _client.post(Uri.parse('$baseUrl/baskets/$basketId/remove_item/'),
+          headers: headers, body: json.encode({'product_id': productId}));
     });
-    if (resp.statusCode == 200) return Basket.fromJson(json.decode(utf8.decode(resp.bodyBytes)));
+    if (resp.statusCode == 200) {
+      return Basket.fromJson(json.decode(utf8.decode(resp.bodyBytes)));
+    }
     throw Exception('Failed to remove item from basket');
   }
 
-  Future<Basket> updateItemQuantity(String basketId, String productId, int quantity) async {
+  Future<Basket> updateItemQuantity(
+      String basketId, String productId, int quantity) async {
     final resp = await _withAuth(() async {
       final token = await _auth.getAccessToken();
       final headers = {'Content-Type': 'application/json'};
       if (token != null) headers['Authorization'] = 'Bearer $token';
-      return _client.post(Uri.parse('$baseUrl/baskets/$basketId/update_item_quantity/'), headers: headers, body: json.encode({'product_id': productId, 'quantity': quantity}));
+      return _client.post(
+          Uri.parse('$baseUrl/baskets/$basketId/update_item_quantity/'),
+          headers: headers,
+          body: json.encode({'product_id': productId, 'quantity': quantity}));
     });
-    if (resp.statusCode == 200) return Basket.fromJson(json.decode(utf8.decode(resp.bodyBytes)));
+    if (resp.statusCode == 200) {
+      return Basket.fromJson(json.decode(utf8.decode(resp.bodyBytes)));
+    }
     throw Exception('Failed to update quantity');
   }
 
@@ -122,11 +178,14 @@ class ApiService {
       final token = await _auth.getAccessToken();
       final headers = <String, String>{};
       if (token != null) headers['Authorization'] = 'Bearer $token';
-      return _client.get(Uri.parse('$baseUrl/baskets/$basketId/compare/'), headers: headers);
+      return _client.get(Uri.parse('$baseUrl/baskets/$basketId/compare/'),
+          headers: headers);
     });
     if (resp.statusCode == 200) {
       List jsonResponse = json.decode(utf8.decode(resp.bodyBytes));
-      return jsonResponse.map((item) => BasketComparisonResult.fromJson(item)).toList();
+      return jsonResponse
+          .map((item) => BasketComparisonResult.fromJson(item))
+          .toList();
     }
     throw Exception('Failed to compare basket prices');
   }
