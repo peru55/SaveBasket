@@ -495,9 +495,8 @@ Products + baskets tests: 40 tests passed
 ```
 
 
-#### Default User Credentials 
+#### Credential safety
 
-Username: peru
-Email: peruemanuel6@gmail.com
-Password: SaveBasket@2026#Peru
-Confirm password: SaveBasket@2026#Peru
+Test and production credentials must be created outside the repository and
+stored in environment variables or the hosting provider's secret manager.
+Never document working usernames, passwords, or secret keys here.

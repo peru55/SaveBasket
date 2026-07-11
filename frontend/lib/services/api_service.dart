@@ -1,7 +1,6 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import 'auth_service.dart';
 import '../models/product.dart';
 import '../models/supermarket.dart';
@@ -11,14 +10,7 @@ class ApiService {
   final http.Client _client = http.Client();
   final AuthService _auth = AuthService();
 
-  // Determine backend URL based on platform
-  static String get baseUrl {
-    if (kIsWeb) return 'http://localhost:8000/api';
-    try {
-      if (Platform.isAndroid) return 'http://10.0.2.2:8000/api';
-    } catch (_) {}
-    return 'http://localhost:8000/api';
-  }
+  static String get baseUrl => ApiConfig.apiBaseUrl;
 
   Future<List<Supermarket>> getSupermarkets() async {
     final resp = await _withAuth(() async {

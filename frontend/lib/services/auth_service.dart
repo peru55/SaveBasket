@@ -1,18 +1,10 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../config/api_config.dart';
 
 class AuthService {
-  // Determine backend URL based on platform (web vs emulator/device)
-  static String get baseUrl {
-    if (kIsWeb) return 'http://localhost:8000';
-    try {
-      if (Platform.isAndroid) return 'http://10.0.2.2:8000';
-    } catch (_) {}
-    return 'http://localhost:8000';
-  }
+  static String get baseUrl => ApiConfig.origin;
   final _storage = const FlutterSecureStorage();
 
   Future<Map<String, dynamic>> login(String username, String password) async {

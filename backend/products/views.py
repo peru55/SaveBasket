@@ -9,6 +9,7 @@ from django.db.models import Q
 from urllib.parse import urlparse
 import requests
 
+from savebasket.permissions import IsAdminOrReadOnly
 from .models import Product, ProductPrice, IngestionHistory, RawScrapedProduct
 from .serializers import ProductSerializer, ProductPriceSerializer
 from supermarkets.models import Supermarket, Branch
@@ -16,7 +17,7 @@ from .match_service import ProductMatchService
 import traceback
 
 class ProductViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAdminOrReadOnly]
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
 
@@ -57,7 +58,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         return queryset
 
 class ProductPriceViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAdminOrReadOnly]
     queryset = ProductPrice.objects.all()
     serializer_class = ProductPriceSerializer
 
@@ -142,6 +143,13 @@ class ScraperIngestView(APIView):
 
     def post(self, request, *args, **kwargs):
         api_key = getattr(settings, "SCRAPER_API_KEY", None)
+        # Production ingestion fails closed before any rows are created.
+        # Configuration and header examples live in docs/deployment.md.
+        if not api_key and not settings.DEBUG:
+            return Response(
+                {"detail": "Scraper ingestion is not configured"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if api_key:
             header = request.headers.get("X-SCRAPER-KEY") or request.META.get("HTTP_X_SCRAPER_KEY")
             if header != api_key:
