@@ -1,8 +1,10 @@
 from rest_framework import viewsets
+from savebasket.permissions import IsAdminOrReadOnly
 from .models import Supermarket, Branch
 from .serializers import SupermarketSerializer, BranchSerializer
 
 class SupermarketViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminOrReadOnly]
     queryset = Supermarket.objects.all().order_name() if hasattr(Supermarket.objects.all(), 'order_name') else Supermarket.objects.all()
     serializer_class = SupermarketSerializer
 
@@ -11,6 +13,7 @@ class SupermarketViewSet(viewsets.ModelViewSet):
         return Supermarket.objects.all().order_by('name')
 
 class BranchViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminOrReadOnly]
     queryset = Branch.objects.all()
     serializer_class = BranchSerializer
 

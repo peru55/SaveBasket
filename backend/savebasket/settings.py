@@ -55,10 +55,9 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
-    # Allow unauthenticated access by default for public endpoints during development.
-    # Protect sensitive views by adding `permission_classes = [IsAuthenticated]` on those views.
+    # New endpoints are private by default. Public reads must be explicit on the view.
     "DEFAULT_PERMISSION_CLASSES": (
-        "rest_framework.permissions.AllowAny",
+        "rest_framework.permissions.IsAuthenticated",
     ),
 }
 

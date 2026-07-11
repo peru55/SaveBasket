@@ -9,6 +9,7 @@ from django.db.models import Q
 from urllib.parse import urlparse
 import requests
 
+from savebasket.permissions import IsAdminOrReadOnly
 from .models import Product, ProductPrice, IngestionHistory, RawScrapedProduct
 from .serializers import ProductSerializer, ProductPriceSerializer
 from supermarkets.models import Supermarket, Branch
@@ -16,7 +17,7 @@ from .match_service import ProductMatchService
 import traceback
 
 class ProductViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAdminOrReadOnly]
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
 
@@ -57,7 +58,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         return queryset
 
 class ProductPriceViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAdminOrReadOnly]
     queryset = ProductPrice.objects.all()
     serializer_class = ProductPriceSerializer
 
