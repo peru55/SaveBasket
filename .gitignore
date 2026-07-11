@@ -270,3 +270,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .worktrees/
+
+# local files
+walkthrough.md
