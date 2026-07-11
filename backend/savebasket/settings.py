@@ -15,19 +15,24 @@ import os
 from dotenv import load_dotenv
 from datetime import timedelta
 
+from .config import split_env_list, validate_production_settings
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load env variables from .env
 load_dotenv(BASE_DIR / '.env')
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-=l6vy6+a82+pj&jc8r%c+7%@i5nsn18&1sg@_(o-0+qcqvr_=&")
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+# The fallback exists only for local development. Production is validated below.
+DEVELOPMENT_SECRET_KEY = "django-insecure-local-development-only"
+SECRET_KEY = os.getenv("SECRET_KEY") or (DEVELOPMENT_SECRET_KEY if DEBUG else "")
+
+ALLOWED_HOSTS = split_env_list(
+    os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1" if DEBUG else "")
+)
 
 
 # Application definition
@@ -125,10 +130,22 @@ else:
         }
     }
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = split_env_list(os.getenv("CORS_ALLOWED_ORIGINS"))
+CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
 
-# Optional API key for securing the scraper ingestion endpoint. Set in .env
+# Required in production; see backend/.env.example and docs/deployment.md.
 SCRAPER_API_KEY = os.getenv("SCRAPER_API_KEY")
+
+# Fail at startup instead of silently launching an unsafe production process.
+validate_production_settings(
+    DEBUG,
+    {
+        "SECRET_KEY": SECRET_KEY,
+        "ALLOWED_HOSTS": ALLOWED_HOSTS,
+        "SCRAPER_API_KEY": SCRAPER_API_KEY,
+        "CORS_ALLOWED_ORIGINS": CORS_ALLOWED_ORIGINS,
+    },
+)
 
 # Product import matching thresholds.
 PRODUCT_SIMILARITY_THRESHOLD = float(os.getenv("PRODUCT_SIMILARITY_THRESHOLD", "0.8"))

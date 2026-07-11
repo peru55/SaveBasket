@@ -143,6 +143,13 @@ class ScraperIngestView(APIView):
 
     def post(self, request, *args, **kwargs):
         api_key = getattr(settings, "SCRAPER_API_KEY", None)
+        # Production ingestion fails closed before any rows are created.
+        # Configuration and header examples live in docs/deployment.md.
+        if not api_key and not settings.DEBUG:
+            return Response(
+                {"detail": "Scraper ingestion is not configured"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if api_key:
             header = request.headers.get("X-SCRAPER-KEY") or request.META.get("HTTP_X_SCRAPER_KEY")
             if header != api_key:
