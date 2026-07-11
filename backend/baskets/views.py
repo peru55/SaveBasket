@@ -11,15 +11,11 @@ class BasketViewSet(viewsets.ModelViewSet):
     serializer_class = BasketSerializer
 
     def get_queryset(self):
-        # In a real app, filter by user: self.request.user.baskets.all()
-        # For initial development and testing, show all baskets.
-        return Basket.objects.all().order_by('-created_at')
+        # Owner scoping protects detail and custom actions through get_object().
+        return self.request.user.baskets.all().order_by('-created_at')
 
     def perform_create(self, serializer):
-        if self.request.user.is_authenticated:
-            serializer.save(user=self.request.user)
-        else:
-            serializer.save()
+        serializer.save(user=self.request.user)
 
     @action(detail=True, methods=['post'])
     def add_item(self, request, pk=None):
