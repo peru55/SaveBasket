@@ -60,6 +60,7 @@ CATEGORY_ALIASES = {
     "rice": "rice",
     "soap": "soap",
     "detergent": "detergent",
+    "sausage": "sausage",
 }
 
 VARIANT_ALIASES = {
@@ -77,6 +78,9 @@ MULTI_VARIANT_BRANDS = {"blue band"}
 
 BRAND_ALIASES = {
     "blueband": "blue band",
+    "daawati": "daawat",
+    "farmer's choice": "farmers choice",
+    "farmers choice": "farmers choice",
 }
 
 
@@ -108,6 +112,8 @@ class ProductMatchService:
             return None
         
         name_lower = name.lower()
+        name_lower = re.sub(r"\bfarmer['’]s\s+choice\b", "farmers choice", name_lower)
+        name_lower = re.sub(r"\bsausages\b", "sausage", name_lower)
         name_lower = name_lower.replace("&", " and ")
         
         match = SIZE_UNIT_RE.search(name_lower)
@@ -520,6 +526,14 @@ class ProductMatchService:
             return None
             
         name_lower = name.lower()
+
+        if re.search(r"\bfarmer(?:['’]s|s)\s+choice\b", name_lower):
+            return "farmers choice"
+        if (
+            re.search(r"\bsafari\b", name_lower)
+            and re.search(r"\bsausages?\b", name_lower)
+        ):
+            return "farmers choice"
         
         for brand in KNOWN_BRANDS:
             if re.search(r'\b' + re.escape(brand) + r'\b', name_lower):

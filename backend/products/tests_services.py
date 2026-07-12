@@ -31,6 +31,68 @@ class ProductMatchServiceTests(TestCase):
         
         self.assertEqual(ProductMatchService.extract_brand("Product name", "RawBrandName"), "rawbrandname")
 
+    def test_canonicalizes_confirmed_retailer_brand_variations(self):
+        self.assertEqual(ProductMatchService.canonical_brand("daawati"), "daawat")
+        self.assertEqual(
+            ProductMatchService.extract_brand("Beef Sausages (Safari) 500Gm"),
+            "farmers choice",
+        )
+        self.assertEqual(
+            ProductMatchService.extract_brand(
+                "Farmer's Choice Safari Beef Sausage 500 Gm"
+            ),
+            "farmers choice",
+        )
+
+    def test_normalizes_sausage_identity_wording(self):
+        normalized = ProductMatchService.normalize_name(
+            "Beef Sausages (Safari) 500Gm"
+        )
+
+        self.assertEqual(normalized, "beef sausage safari 500g")
+        self.assertEqual(
+            ProductMatchService.extract_canonical_category(normalized),
+            "sausage",
+        )
+
+    def test_daawati_import_reuses_daawat_product(self):
+        canonical_raw = RawScrapedProduct.objects.create(
+            store_name="Naivas",
+            product_name="Daawat Long Grain Rice 5Kg",
+            price=1000.00,
+        )
+        alias_raw = RawScrapedProduct.objects.create(
+            store_name="CleanShelf",
+            product_name="Daawati Long Grain Rice 5Kg",
+            price=990.00,
+        )
+
+        canonical, _, _ = ProductMatchService.process_raw_product(canonical_raw)
+        matched, created, _ = ProductMatchService.process_raw_product(alias_raw)
+
+        self.assertFalse(created)
+        self.assertEqual(matched, canonical)
+        self.assertEqual(Product.objects.count(), 1)
+
+    def test_cleanshelf_safari_sausage_reuses_farmers_choice_product(self):
+        canonical_raw = RawScrapedProduct.objects.create(
+            store_name="Naivas",
+            product_name="Farmer's Choice Safari Beef Sausage 500 Gm",
+            price=500.00,
+        )
+        alias_raw = RawScrapedProduct.objects.create(
+            store_name="CleanShelf",
+            product_name="Beef Sausages (Safari) 500Gm",
+            price=490.00,
+        )
+
+        canonical, _, _ = ProductMatchService.process_raw_product(canonical_raw)
+        matched, created, _ = ProductMatchService.process_raw_product(alias_raw)
+
+        self.assertFalse(created)
+        self.assertEqual(matched, canonical)
+        self.assertEqual(Product.objects.count(), 1)
+
     def test_extract_size_unit(self):
         self.assertEqual(ProductMatchService.extract_size_unit("Pembe Maize Flour 2kg"), ("2", "kg"))
         self.assertEqual(ProductMatchService.extract_size_unit("Pembe Flour 2 KG"), ("2", "kg"))
