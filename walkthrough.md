@@ -220,9 +220,11 @@ changes. Back up PostgreSQL before applying a catalog repair. Then run:
 
 The apply command moves store rows, branch prices, basket references, aliases,
 and review references to the approved canonical products inside one database
-transaction. It creates reviewed CleanShelf aliases and deletes a duplicate
-only after no dependent rows remain. Running the dry-run command again should
-show `Ready: 0`.
+transaction. It also corrects canonical brand/category/identity metadata,
+creates reviewed CleanShelf aliases, and deletes a duplicate only after no
+dependent rows remain. Running the dry-run command again should show `Ready: 0`.
+`Canonical-only` means the duplicate is already gone; another explicit
+`--apply` is safe and updates stale canonical metadata when necessary.
 
 The fixed matching rules are in `backend/products/match_service.py`. The
 targeted, reusable database repair is in

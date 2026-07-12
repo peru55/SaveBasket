@@ -134,10 +134,34 @@ class ConfirmedDuplicateRepairTests(TestCase):
         review.refresh_from_db()
         self.assertEqual(review.matched_product, canonical)
         self.assertEqual(review.candidate_product, canonical)
+        canonical.refresh_from_db()
+        self.assertEqual(canonical.brand, "farmers choice")
+        self.assertEqual(canonical.canonical_category, "sausage")
+        self.assertEqual(
+            canonical.identity_key,
+            "farmers choice|sausage|500|g",
+        )
 
         second = apply_confirmed_duplicate_repairs()
         self.assertEqual(second.merged, 0)
         self.assertEqual(Product.objects.count(), 2)
+
+    def test_apply_repairs_stale_canonical_metadata_without_duplicate(self):
+        canonical = Product.objects.create(
+            name="Farmer's Choice Safari Beef Sausage 500 Gm",
+            normalized_name="farmer s choice safari beef sausage 500g",
+            brand="safari",
+            size="500",
+            unit="g",
+        )
+
+        result = apply_confirmed_duplicate_repairs()
+
+        canonical.refresh_from_db()
+        self.assertEqual(result.normalized, 1)
+        self.assertEqual(canonical.brand, "farmers choice")
+        self.assertEqual(canonical.canonical_category, "sausage")
+        self.assertEqual(canonical.identity_key, "farmers choice|sausage|500|g")
 
 
 class ConfirmedDuplicateRepairCommandTests(TestCase):

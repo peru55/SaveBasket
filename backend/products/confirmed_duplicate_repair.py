@@ -36,6 +36,7 @@ class RepairResult:
     merged: int
     skipped: int
     ambiguous: int
+    normalized: int
 
 
 CONFIRMED_DUPLICATE_PAIRS = (
@@ -78,6 +79,14 @@ def plan_confirmed_duplicate_repairs():
                     status="ready",
                     canonical_id=canonical_ids[0],
                     duplicate_id=duplicate_ids[0],
+                )
+            )
+        elif len(canonical_ids) == 1:
+            plans.append(
+                RepairPlan(
+                    pair=pair,
+                    status="canonical_only",
+                    canonical_id=canonical_ids[0],
                 )
             )
         else:
@@ -188,6 +197,36 @@ def _assert_duplicate_is_empty(duplicate):
         )
 
 
+def _normalize_canonical_metadata(canonical):
+    normalized = ProductMatchService.normalize_name(canonical.name)
+    brand = ProductMatchService.extract_brand(canonical.name)
+    size, unit = ProductMatchService.extract_size_unit(canonical.name)
+    category = ProductMatchService.extract_canonical_category(normalized)
+    variant = ProductMatchService.extract_variant(normalized)
+    identity_key = ProductMatchService.identity_key(
+        brand,
+        category,
+        variant,
+        size,
+        unit,
+    )
+    desired = {
+        "brand": brand,
+        "size": size,
+        "unit": unit,
+        "canonical_category": category,
+        "variant": variant,
+        "identity_key": identity_key,
+    }
+    changed = [field for field, value in desired.items() if getattr(canonical, field) != value]
+    if not changed:
+        return False
+    for field, value in desired.items():
+        setattr(canonical, field, value)
+    canonical.save(update_fields=changed + ["updated_at"])
+    return True
+
+
 def _apply_plan(plan):
     products = {
         product.id: product
@@ -197,6 +236,8 @@ def _apply_plan(plan):
     }
     canonical = products[plan.canonical_id]
     duplicate = products[plan.duplicate_id]
+
+    metadata_changed = _normalize_canonical_metadata(canonical)
 
     _move_store_products(canonical, duplicate)
     _move_prices(canonical, duplicate)
@@ -218,6 +259,7 @@ def _apply_plan(plan):
 
     _assert_duplicate_is_empty(duplicate)
     duplicate.delete()
+    return metadata_changed
 
 
 @transaction.atomic
@@ -226,13 +268,24 @@ def apply_confirmed_duplicate_repairs():
     merged = 0
     skipped = 0
     ambiguous = 0
+    normalized = 0
     for plan in plans:
         if plan.status == "ambiguous":
             ambiguous += 1
             continue
+        if plan.status == "canonical_only":
+            canonical = Product.objects.select_for_update().get(pk=plan.canonical_id)
+            normalized += int(_normalize_canonical_metadata(canonical))
+            skipped += 1
+            continue
         if plan.status != "ready":
             skipped += 1
             continue
-        _apply_plan(plan)
+        normalized += int(_apply_plan(plan))
         merged += 1
-    return RepairResult(merged=merged, skipped=skipped, ambiguous=ambiguous)
+    return RepairResult(
+        merged=merged,
+        skipped=skipped,
+        ambiguous=ambiguous,
+        normalized=normalized,
+    )
