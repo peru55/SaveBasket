@@ -10,10 +10,33 @@ import json
 import os
 from typing import List
 
+from dotenv import dotenv_values
+
 from push_to_backend import build_payload_from_url, push_payload
 
 
 DEFAULT_JOBS_FILE = os.path.join(os.path.dirname(__file__), 'ci_jobs.txt')
+DEFAULT_BACKEND_ENV_FILE = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..', 'backend', '.env')
+)
+
+
+def resolve_api_key(cli_key, environ=None, env_path=None):
+    if cli_key:
+        return cli_key
+
+    environ = os.environ if environ is None else environ
+    process_key = environ.get('SCRAPER_API_KEY')
+    if process_key:
+        return process_key
+
+    env_path = DEFAULT_BACKEND_ENV_FILE if env_path is None else env_path
+    if os.path.exists(env_path):
+        file_key = dotenv_values(env_path).get('SCRAPER_API_KEY')
+        if file_key:
+            return file_key
+
+    return None
 
 
 def load_job_urls(file_path: str) -> List[str]:
@@ -54,6 +77,13 @@ def main(argv=None):
     if not args.backend and not args.dry_run:
         parser.error('--backend is required unless --dry-run or --list-jobs is used')
 
+    api_key = resolve_api_key(args.key, env_path=DEFAULT_BACKEND_ENV_FILE)
+    if args.backend and not args.dry_run and not api_key:
+        parser.error(
+            'SCRAPER_API_KEY is required: pass --key, set the environment '
+            'variable, or add it to backend/.env'
+        )
+
     for url in urls:
         try:
             payload = build_payload_from_url(url)
@@ -65,7 +95,7 @@ def main(argv=None):
             print(json.dumps(payload, indent=2, ensure_ascii=False))
             continue
 
-        status, data = push_payload(args.backend, args.key, payload)
+        status, data = push_payload(args.backend, api_key, payload)
         print(f'Pushed {url}: status={status} response={data}')
 
     return 0
