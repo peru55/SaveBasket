@@ -9,7 +9,12 @@ https://www.naivas.online/pembe-maize-meal-2kg
 https://www.naivas.online/kabras-packed-sugar-white-1kg
 https://www.naivas.online/kabras-packed-sugar-white-2kg
 https://www.naivas.online/jameson-black-barrel-750ml
-
+https://www.naivas.online/tomatoes-kg
+https://www.naivas.online/zesta-strawberry-jam-pet-900-g
+https://www.naivas.online/farmer-s-choice-safari-beef-sausage-500g
+https://www.naivas.online/daawat-long-grain-rice-5kg
+https://www.naivas.online/sunrice-basmati-rice-5kg
+https://www.naivas.online/onions-red-p/kg
 
 ### quickmart
 https://www.quickmart.co.ke/products/brookside-fresh-milk-1l
@@ -22,6 +27,12 @@ https://www.quickmart.co.ke/pembe-maize-flour-1kg-13
 https://www.quickmart.co.ke/kabras-sugar-white-2kg-38  
 # sugar 1kg unavailable 
 https://www.quickmart.co.ke/jameson-black-barrel-irish-whiskey-%E2%80%93-750ml-10
+https://www.quickmart.co.ke/tomatoes-per-kg-9
+https://www.quickmart.co.ke/zesta-strawberry-jam-pet-900g-11
+https://www.quickmart.co.ke/farmers-choice-safari-beef-sausages-500g-53
+https://www.quickmart.co.ke/daawat-long-grain-rice-5kg-4
+https://www.quickmart.co.ke/sunrice-basmati-5kg-34
+https://www.quickmart.co.ke/red-onions-per-kg-35
 
 ### carrefour
 # https://www.carrefour.ke/p/1234567890
@@ -37,13 +48,22 @@ https://cleanshelf.online/product/pembe-maize-1kg
 https://cleanshelf.online/product/kabras-sugar-2kg
 https://cleanshelf.online/product/kabras-sugar-1kg
 https://cleanshelf.online/product/jameson-black-barrel-750ml
+https://cleanshelf.online/product/zesta-strawberry-jam-pet-900gm
+https://cleanshelf.online/product/beef-sausages-safari-500gm
+https://cleanshelf.online/product/daawati-long-grain-rice-5kg
+https://cleanshelf.online/product/red-onions-per-kg
 
 ### eastmatt
-https://eastmatt.com/item-details.php?ItemID=130137
-https://eastmatt.com/item-details.php?ItemID=130252
+https://eastmatt.com/item-details.php?ItemID=130137 #green grams
+https://eastmatt.com/item-details.php?ItemID=130252 #Daawat Long Grain Rice 5kg
 https://eastmatt.com/item-details.php?ItemID=120068 #pembe maize flour
 https://eastmatt.com/item-details.php?ItemID=190105 #kabras sugar 2kg
 https://eastmatt.com/item-details.php?ItemID=190104 #kabras sugar 1kg
+https://eastmatt.com/item-details.php?ItemID=660434 #tomatoes /kg
+https://eastmatt.com/item-details.php?ItemID=1013651 #zesta 900g
+https://eastmatt.com/item-details.php?ItemID=210260 #farmers choice safari 500gm
+https://eastmatt.com/item-details.php?ItemID=1016130 #Pearl Super Basmati Fortified Rice 5kg
+https://eastmatt.com/item-details.php?ItemID=660454 #Mb Red Onion /kg
 
 
 
