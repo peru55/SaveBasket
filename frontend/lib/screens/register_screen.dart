@@ -17,6 +17,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _email = '';
   String _password = '';
   bool _loading = false;
+  bool _obscurePassword = true;
+  bool _obscurePasswordConfirmation = true;
 
   void _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -115,11 +117,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Password',
-                      prefixIcon: Icon(Icons.lock_outline_rounded),
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      suffixIcon: IconButton(
+                        tooltip: _obscurePassword
+                            ? 'Show password'
+                            : 'Hide password',
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          semanticLabel: _obscurePassword
+                              ? 'Show password'
+                              : 'Hide password',
+                        ),
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                      ),
                     ),
-                    obscureText: true,
+                    obscureText: _obscurePassword,
                     textInputAction: TextInputAction.next,
                     onChanged: (value) => _password = value,
                     onSaved: (s) => _password = s ?? '',
@@ -128,11 +146,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Confirm password',
-                      prefixIcon: Icon(Icons.verified_user_outlined),
+                      prefixIcon: const Icon(Icons.verified_user_outlined),
+                      suffixIcon: IconButton(
+                        tooltip: _obscurePasswordConfirmation
+                            ? 'Show password confirmation'
+                            : 'Hide password confirmation',
+                        icon: Icon(
+                          _obscurePasswordConfirmation
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          semanticLabel: _obscurePasswordConfirmation
+                              ? 'Show password confirmation'
+                              : 'Hide password confirmation',
+                        ),
+                        onPressed: () => setState(
+                          () => _obscurePasswordConfirmation =
+                              !_obscurePasswordConfirmation,
+                        ),
+                      ),
                     ),
-                    obscureText: true,
+                    obscureText: _obscurePasswordConfirmation,
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => _loading ? null : _submit(),
                     validator: (s) {
