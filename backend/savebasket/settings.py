@@ -130,8 +130,16 @@ else:
         }
     }
 
-CORS_ALLOWED_ORIGINS = split_env_list(os.getenv("CORS_ALLOWED_ORIGINS"))
-CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
+CORS_ALLOW_ALL_ORIGINS = False
+if DEBUG:
+    CORS_ALLOWED_ORIGINS = []
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^http://localhost:\d+$",
+        r"^http://127\.0\.0\.1:\d+$",
+    ]
+else:
+    CORS_ALLOWED_ORIGINS = split_env_list(os.getenv("CORS_ALLOWED_ORIGINS"))
+    CORS_ALLOWED_ORIGIN_REGEXES = []
 
 # Required in production; see backend/.env.example and docs/deployment.md.
 SCRAPER_API_KEY = os.getenv("SCRAPER_API_KEY")
