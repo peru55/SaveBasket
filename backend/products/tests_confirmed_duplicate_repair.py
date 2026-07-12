@@ -1,4 +1,7 @@
+from io import StringIO
+
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.test import TestCase
 
 from baskets.models import Basket, BasketItem
@@ -135,3 +138,54 @@ class ConfirmedDuplicateRepairTests(TestCase):
         second = apply_confirmed_duplicate_repairs()
         self.assertEqual(second.merged, 0)
         self.assertEqual(Product.objects.count(), 2)
+
+
+class ConfirmedDuplicateRepairCommandTests(TestCase):
+    def create_both_pairs(self):
+        definitions = (
+            (
+                "Farmer's Choice Safari Beef Sausage 500 Gm",
+                "farmer s choice safari beef sausage 500g",
+                "Beef Sausages (Safari) 500Gm",
+                "beef sausages safari 500g",
+            ),
+            (
+                "Daawat Long Grain Rice 5Kg",
+                "daawat long grain rice 5kg",
+                "Daawati Long Grain Rice 5Kg",
+                "daawati long grain rice 5kg",
+            ),
+        )
+        for canonical_name, canonical_normalized, duplicate_name, duplicate_normalized in definitions:
+            Product.objects.create(
+                name=canonical_name,
+                normalized_name=canonical_normalized,
+            )
+            Product.objects.create(
+                name=duplicate_name,
+                normalized_name=duplicate_normalized,
+            )
+
+    def test_command_defaults_to_dry_run(self):
+        self.create_both_pairs()
+        output = StringIO()
+
+        call_command("repair_confirmed_duplicates", stdout=output)
+
+        self.assertIn("DRY RUN", output.getvalue())
+        self.assertIn("Ready: 2", output.getvalue())
+        self.assertEqual(Product.objects.count(), 4)
+
+    def test_apply_command_repairs_pairs_and_second_dry_run_is_empty(self):
+        self.create_both_pairs()
+        output = StringIO()
+
+        call_command("repair_confirmed_duplicates", apply=True, stdout=output)
+
+        self.assertIn("APPLIED", output.getvalue())
+        self.assertIn("Merged: 2", output.getvalue())
+        self.assertEqual(Product.objects.count(), 2)
+
+        second_output = StringIO()
+        call_command("repair_confirmed_duplicates", stdout=second_output)
+        self.assertIn("Ready: 0", second_output.getvalue())

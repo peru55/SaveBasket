@@ -194,6 +194,43 @@ cd ..\backend
 .\.venv\Scripts\python.exe manage.py shell -c "from supermarkets.models import Supermarket,Branch; from products.models import Product,ProductPrice,RawScrapedProduct,IngestionHistory; print({'supermarkets':Supermarket.objects.count(),'branches':Branch.objects.count(),'products':Product.objects.count(),'prices':ProductPrice.objects.count(),'raw':RawScrapedProduct.objects.count(),'ingestions':IngestionHistory.objects.count()})"
 ```
 
+### Repair the confirmed Safari sausage and Daawat duplicates
+
+The matcher recognizes these confirmed retailer naming variations:
+
+- CleanShelf `Beef Sausages (Safari) 500Gm` is the same product as
+  `Farmer's Choice Safari Beef Sausage 500 Gm`.
+- CleanShelf `Daawati Long Grain Rice 5Kg` is the same product as
+  `Daawat Long Grain Rice 5Kg`.
+
+First run the read-only preview against the database configured in
+`backend/.env`:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe manage.py repair_confirmed_duplicates
+```
+
+The output begins with `DRY RUN`, lists each exact pair, and makes no database
+changes. Back up PostgreSQL before applying a catalog repair. Then run:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py repair_confirmed_duplicates --apply
+```
+
+The apply command moves store rows, branch prices, basket references, aliases,
+and review references to the approved canonical products inside one database
+transaction. It creates reviewed CleanShelf aliases and deletes a duplicate
+only after no dependent rows remain. Running the dry-run command again should
+show `Ready: 0`.
+
+The fixed matching rules are in `backend/products/match_service.py`. The
+targeted, reusable database repair is in
+`backend/products/confirmed_duplicate_repair.py`, exposed by
+`backend/products/management/commands/repair_confirmed_duplicates.py`. Tests
+are in `backend/products/tests_services.py` and
+`backend/products/tests_confirmed_duplicate_repair.py`.
+
 ### Frontend recovery after changing databases
 
 JWTs saved by the Flutter app can refer to a user that existed in SQLite but
