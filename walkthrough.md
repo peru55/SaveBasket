@@ -34,7 +34,6 @@ documentation:
 DEBUG=True
 SECRET_KEY=<generated-local-django-key>
 ALLOWED_HOSTS=localhost,127.0.0.1
-CORS_ALLOWED_ORIGINS=http://localhost:3000
 SCRAPER_API_KEY=<generated-scraper-key>
 
 DB_NAME=<local-database-name>
@@ -45,6 +44,13 @@ DB_PORT=5433
 ```
 
 See `docs/deployment.md` for production secret generation and storage.
+
+In local `DEBUG=True` mode, Django accepts Flutter web origins matching only
+`http://localhost:<numeric-port>` or `http://127.0.0.1:<numeric-port>`. This
+supports Chrome's random Flutter development port without opening CORS to every
+website. `CORS_ALLOWED_ORIGINS` is an explicit production setting when
+`DEBUG=False`. The implementation is in `backend/savebasket/settings.py`, and
+the policy tests are in `backend/users/tests_cors.py`.
 
 ### Verify PostgreSQL and migrations
 
@@ -128,8 +134,9 @@ Test-NetConnection 127.0.0.1 -Port 8000
 
 ### Seed PostgreSQL through the scraper
 
-The backend must be running first. The command-line key must exactly match
-`SCRAPER_API_KEY` in `backend/.env`.
+The backend must be running first. The ingestion key must exactly match
+`SCRAPER_API_KEY` loaded by Django from `backend/.env`. Restart Django after
+changing that file because a running server keeps the old setting in memory.
 
 Push one freshly scraped product:
 
@@ -148,8 +155,26 @@ Run all active URLs in `Scrapper/ci_jobs.txt`:
 
 ```powershell
 python ci_runner.py --list-jobs
-python ci_runner.py --backend http://127.0.0.1:8000 --key YOUR_SCRAPER_API_KEY
+python ci_runner.py --backend http://127.0.0.1:8000
 ```
+
+`ci_runner.py` resolves the key once, without printing it, in this order:
+
+1. `--key` command-line value.
+2. The process environment variable `SCRAPER_API_KEY`.
+3. The ignored local file `backend/.env`.
+
+The preferred local command above therefore needs no `--key` when
+`backend/.env` is configured. An explicit CLI value overrides the other
+sources:
+
+```powershell
+python ci_runner.py --backend http://127.0.0.1:8000 --key <actual-key>
+```
+
+Do not type the literal text `YOUR_SCRAPER_API_KEY` or `<actual-key>`; those are
+documentation placeholders. Key resolution is implemented in
+`Scrapper/ci_runner.py` and covered by `Scrapper/test_ci_runner_key.py`.
 
 Push products already stored in the scraper JSON store without scraping them
 again:
@@ -188,6 +213,32 @@ The frontend now distinguishes these cases:
 For Flutter web, clear stored tokens through the browser's site-data controls
 for the local frontend origin, reload the page, and sign in again.
 
+If registration reports `ClientException: Failed to fetch`, first confirm
+Django is running at `http://127.0.0.1:8000`. Then restart Django so it loads the
+current CORS settings and retry from a Flutter URL using `localhost` or
+`127.0.0.1`. A safe preflight check is:
+
+```powershell
+$headers = @{
+  Origin = 'http://localhost:52498'
+  'Access-Control-Request-Method' = 'POST'
+}
+$response = Invoke-WebRequest -Method Options -Uri 'http://127.0.0.1:8000/api/auth/register/' -Headers $headers
+$response.Headers['Access-Control-Allow-Origin']
+```
+
+Replace `52498` with the port in the current Flutter browser URL. The output
+should echo that exact origin. A public hostname is intentionally rejected in
+development unless it is configured as a production origin with `DEBUG=False`.
+
+Login and registration now have eye icons for showing or hiding passwords.
+Registration has independent controls for the password and confirmation fields.
+The widgets live in `frontend/lib/screens/login_screen.dart` and
+`frontend/lib/screens/register_screen.dart`; their behavior is covered by
+`frontend/test/password_visibility_test.dart`. Django still enforces its server
+password validators: use at least 8 characters and avoid passwords that are too
+common, entirely numeric, or too similar to account information.
+
 ### Troubleshooting quick reference
 
 | Symptom | Likely cause | Recovery |
@@ -197,7 +248,8 @@ for the local frontend origin, reload the page, and sign in again.
 | `Session expired` in Flutter | Stored JWT refers to a missing PostgreSQL user | Log out/clear site data, recreate the user, sign in |
 | `Backend offline` in Flutter | No process reachable at the configured API origin | Start `runserver`; test port `8000` |
 | `Backend error` in Flutter | Django returned a non-authentication error | Read server logs; run checks and migrations |
-| Scraper returns `403` | Missing or mismatched scraper key | Pass the same `SCRAPER_API_KEY` with `--key` |
+| Registration says `Failed to fetch` | Django is offline, API origin is wrong, or the running server has stale CORS settings | Start/restart Django, confirm port `8000`, and use a localhost/127.0.0.1 Flutter origin |
+| Scraper returns `403 Invalid API key` | CLI/process key overrides `backend/.env`, or Django was not restarted after a key change | Remove the stale override or pass the matching key, then restart Django |
 | Product search is empty | New database has no catalog rows | Run one-product, batch, or JSON ingestion |
 
 ---
@@ -325,6 +377,7 @@ The frontend is a Flutter Material 3 app using Provider state management.
 ### Main Features
 
 - Login and registration with JWT.
+- Accessible show/hide password controls on login and registration.
 - Responsive layout for mobile, tablets, laptops, and desktop.
 - Web/tablet/laptop auth screens use `assets/app_images/splash_screen_background.png`.
 - Product search with product images.
@@ -415,10 +468,17 @@ venv\Scripts\activate
 python run_scraper.py "https://www.naivas.online/brookside-fresh-milk-1l" --backend http://127.0.0.1:8000
 ```
 
-If `SCRAPER_API_KEY` is set in `backend/.env`, pass:
+For `run_scraper.py`, pass the same key Django loaded from `backend/.env`:
 
 ```bash
 --key YOUR_KEY
+```
+
+For batch ingestion, `ci_runner.py` automatically falls back to the ignored
+`backend/.env` after checking its CLI option and process environment:
+
+```bash
+python ci_runner.py --backend http://127.0.0.1:8000
 ```
 
 By default, unchanged local JSON snapshots are not pushed. Add `--push-unchanged` when you want an ingestion-history row even if the product did not change.
@@ -478,13 +538,13 @@ python run_scraper.py "https://www.naivas.online/brookside-fresh-milk-1l"
 
 ```bash
 cd backend
-.venv\Scripts\python.exe manage.py test products baskets
+.venv\Scripts\python.exe manage.py test
 ```
 
 Latest verified result:
 
 ```text
-26 tests passed
+69 tests passed; Django system check passed
 ```
 
 ### Scrapper
@@ -497,7 +557,7 @@ venv\Scripts\python.exe -m unittest discover -s . -p "test_*.py"
 Latest verified result:
 
 ```text
-29 tests passed
+40 tests passed
 ```
 
 ### Frontend
@@ -505,12 +565,14 @@ Latest verified result:
 ```bash
 cd frontend
 flutter analyze
+flutter test
+flutter build web --release --dart-define=API_BASE_URL=https://api.example.com
 ```
 
 Latest verified result:
 
 ```text
-No issues found
+No analysis issues; 16 tests passed; release web build succeeded
 ```
 
 ---
@@ -520,7 +582,7 @@ No issues found
 ```text
 Scrapper ──POST /api/scraper/ingest/──▶ Backend ──REST API──▶ Frontend
    │                                      │
-   └── JSON snapshots + price history     └── SQLite locally / PostgreSQL-ready
+   └── JSON snapshots + price history     └── PostgreSQL locally on port 5433
 ```
 
 Current status:
